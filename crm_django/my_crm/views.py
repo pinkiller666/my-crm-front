@@ -5,6 +5,7 @@ from .models import MoneyEvent
 from .models import Account
 from django.shortcuts import render, redirect
 from django.http import JsonResponse
+from weekdays import Weekday
 from django.views import View
 from .forms import MoneyEventForm
 from django.contrib import messages
@@ -486,15 +487,30 @@ def _add_repetitive_occurrence_if_in_range(event, occurrence_dt, start_dt, end_d
 
 def parse_days_of_week(days_of_week_str):
     """
-    Разбирает строку вида "0,2,4" в множество чисел {0,2,4},
-    где 0=Понедельник, 6=Воскресенье (см. datetime.weekday()).
+    Разбирает строку вида "понедельник, Wednesday, 5" в множество чисел {1, 3, 5},
+    где 1 = Понедельник, 7 = Воскресенье (в соответствии с нашим классом Weekday).
+
     Если строка пустая, вернёт пустое множество.
     """
     if not days_of_week_str:
         return set()
-    # Разбиваем по запятой и преобразуем в int
+
     items = days_of_week_str.split(',')
-    return set(int(x.strip()) for x in items if x.strip().isdigit())
+    parsed_days = set()
+
+    for item in items:
+        item = item.strip()  # Убираем пробелы
+        if not item:
+            continue
+        try:
+            # Используем Weekday.get_day_number() для обработки
+            day_number = Weekday.get_day_number(item)
+            parsed_days.add(day_number)
+        except ValueError:
+            # Если день не распознан — игнорируем
+            print(f"⚠️ Предупреждение: '{item}' не является корректным днём недели.")
+
+    return parsed_days
 
 
 def parse_specific_dates(dates_str):
