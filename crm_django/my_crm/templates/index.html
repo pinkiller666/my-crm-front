@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+
+{% block title %}
+    {% if single %}
+        {{ title_text }}
+    {% else %}
+        Wildest Dreams
+    {% endif %}
+{% endblock %}
+
+{% block content %}
+{% if not single %}
+    <div class="pagination">
+        {% if page > 1 %}
+            <a href="{{ url_for('index', page=page-1) }}">Позднее</a>
+        {% endif %}
+    </div>
+
+{% else %}
+<a class="back-link" href="{{ url_for('index') }}">← Все посты</a>
+        {% endif %}
+
+
+    <div class="posts">
+        {% for post_group in grouped_posts.values() %}
+            {% with post_group=post_group %}
+                {% include 'post_display.html' %}
+                {% if single %}
+                <a class="pure-button" href="tg://resolve?domain={{ post_group[0].channel_username }}&post={{ post_group[0].post_id }}">💬 Обсудить в канале</a>
+                {% endif %}
+            {% endwith %}
+        {% endfor %}
+    </div>
+    
+    {% if not single %}
+    <div class="pagination">
+        {% if page < total_pages %}
+            <a href="{{ url_for('index', page=page+1) }}">Ранее</a>
+    </div>
+        {% endif %}
+    {% endif %}
+{% endblock %}

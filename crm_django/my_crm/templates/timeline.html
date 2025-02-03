@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+
+{% block title %}
+        Woof TimeLine
+{% endblock %}
+
+{% block content %}
+    {% include 'budget_info.html' %}
+    {% include 'calendar.html' %}
+    {{ plot_div|safe }}
+{% endblock %}

@@ -1,0 +1,570 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container py-4">
+  <h3 class="text-center text-primary mb-4">Создание нового события</h3>
+
+  <!-- Начинаем форму -->
+  <form method="POST" action="">
+    {% csrf_token %}
+
+    <!-- Радиокнопки для выбора типа события -->
+    <div class="d-flex justify-content-center mb-4">
+      <div class="form-check form-check-inline">
+        <input class="form-check-input" type="radio" name="eventType" id="singleEvent" value="single">
+        <label class="form-check-label" for="singleEvent">Одноразовое событие</label>
+      </div>
+      <div class="form-check form-check-inline">
+        <input class="form-check-input" type="radio" name="eventType" id="repetitiveEvent" value="repetitive">
+        <label class="form-check-label" for="repetitiveEvent">Повторяющееся событие</label>
+      </div>
+      <div class="form-check form-check-inline">
+        <input class="form-check-input" type="radio" name="eventType" id="incomeEvent" value="income">
+        <label class="form-check-label" for="incomeEvent">Приход денег</label>
+      </div>
+      <!-- Убрали radio "nonFinancialEvent" -->
+    </div>
+
+    <!-- Поля для ввода, скрытые по умолчанию -->
+    <div id="formFieldsContainer" class="mt-4" style="display: none;">
+
+      <!-- Общие поля (для всех типов событий) -->
+      <div id="commonFields">
+        <div class="mb-3">
+          <label class="form-label">Название события:</label>
+          <input type="text" class="form-control" id="eventName" name="eventName" placeholder="Введите название события">
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label">Комментарий:</label>
+          <textarea class="form-control" id="eventComment" name="eventComment" rows="3" placeholder="Введите комментарий"></textarea>
+        </div>
+
+        <!-- Поле "Теги" (хэштеги), общее для всех типов -->
+        <div class="mb-3">
+          <label class="form-label">Теги (хэштеги):</label>
+          <div class="common-tags-container">
+            <!--
+              Будем создавать «бэджики» при вводе и сохранять результат в
+              скрытое поле commonTagsHidden, чтобы отправить на сервер.
+            -->
+            <input type="text" class="form-control" id="commonTagsInput" placeholder="Введите тег и нажмите Enter">
+            <input type="hidden" id="commonTagsHidden" name="tags" value="">
+          </div>
+        </div>
+
+        <div class="form-check form-switch mb-3">
+          <input class="form-check-input" type="checkbox" id="eventIsActive" name="eventIsActive">
+          <label class="form-check-label" for="eventIsActive">Активно</label>
+        </div>
+      </div>
+
+      <!-- Поля для одноразового события -->
+      <div id="singleEventFields" style="display: none;">
+
+        <!-- Дата события -->
+        <div class="mb-3">
+          <label class="form-label">Дата события:</label>
+          <input type="date" class="form-control" id="singleEventDate" name="singleEventDate">
+        </div>
+
+        <!-- Время начала (опционально) -->
+        <div class="mb-3">
+          <label class="form-label">Время начала (опционально):</label>
+          <input type="time" class="form-control" id="singleStartTime" name="singleStartTime">
+        </div>
+
+        <!-- Продолжительность (минуты, опционально) -->
+        <div class="mb-3">
+          <label class="form-label">Продолжительность (минуты, опционально):</label>
+          <input type="number" class="form-control" id="singleDuration" name="singleDuration">
+        </div>
+
+        <!-- Статус события -->
+        <div class="mb-3">
+          <label class="form-label">Статус события:</label>
+          <select class="form-select" id="singleEventStatus" name="singleEventStatus">
+            <option value="" disabled selected>Выберите статус</option>
+            <option value="incomplete">Не завершено</option>
+            <option value="complete">Завершено</option>
+            <option value="cancelled">Отменено</option>
+            <option value="on_pause">На паузе</option>
+            <option value="in_process">В процессе</option>
+          </select>
+        </div>
+
+        <!-- Переключатель: финансовое или нет -->
+        <div class="form-check form-switch mb-3">
+          <input class="form-check-input" type="checkbox" id="singleIsFinancial" name="singleIsFinancial">
+          <label class="form-check-label" for="singleIsFinancial">Финансовые детали?</label>
+        </div>
+
+        <!-- Блок с финансовыми деталями (скрыт, если чекбокс не включён) -->
+        <div id="singleFinancialDetails" style="display: none;">
+          <!-- Сумма -->
+          <div class="mb-3">
+            <label class="form-label">Сумма (расход):</label>
+            <div class="input-group">
+              <input type="number" class="form-control" id="singleAmount" name="singleAmount" placeholder="Введите сумму" min="0">
+              <span class="input-group-text">₽</span>
+            </div>
+          </div>
+
+          <!-- Выбор аккаунта -->
+          <div class="mb-3">
+            <label class="form-label">Выберите аккаунт:</label>
+            <select class="form-select" id="singleEventAccount" name="singleEventAccount">
+              <option value="" disabled selected>Выберите аккаунт</option>
+              {% for account in accounts %}
+                <option value="{{ account.id }}">{{ account.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div> <!-- singleFinancialDetails -->
+
+      </div> <!-- singleEventFields -->
+
+      <!-- Поля для повторяющегося события -->
+      <div id="repetitiveEventFields" style="display: none;">
+        <h5>Повторяющееся событие</h5>
+
+        <!-- Даты начала и окончания -->
+        <div class="row">
+          <div class="col-md-6 mb-3">
+            <label class="form-label">Дата начала:</label>
+            <input type="date" class="form-control" id="repetitiveStartDate" name="repetitiveStartDate">
+          </div>
+          <div class="col-md-6 mb-3">
+            <label class="form-label">Дата окончания:</label>
+            <input type="date" class="form-control" id="repetitiveEndDate" name="repetitiveEndDate">
+          </div>
+        </div>
+
+        <!-- Тип повторения: радиокнопки -->
+        <label class="form-label">Тип повторения:</label>
+        <div class="mb-3">
+          <div class="form-check form-check-inline">
+            <input class="form-check-input" type="radio" name="repetitiveTypeRadio" id="daysOfWeekRadio" value="days_of_week">
+            <label class="form-check-label" for="daysOfWeekRadio">По дням недели</label>
+          </div>
+          <div class="form-check form-check-inline">
+            <input class="form-check-input" type="radio" name="repetitiveTypeRadio" id="veryDateRadio" value="very_date">
+            <label class="form-check-label" for="veryDateRadio">По конкретным числам</label>
+          </div>
+          <div class="form-check form-check-inline">
+            <input class="form-check-input" type="radio" name="repetitiveTypeRadio" id="nDaysRadio" value="n_days">
+            <label class="form-check-label" for="nDaysRadio">Через X дней</label>
+          </div>
+        </div>
+
+        <!-- Поля для "По дням недели" -->
+        <div id="repetitiveDaysOfWeek" style="display: none;">
+          <label class="form-label">Выберите дни недели:</label><br>
+          <div class="form-check form-check-inline">
+            <input class="form-check-input" type="checkbox" name="days_of_week" value="monday"> Пн
+          </div>
+          <div class="form-check form-check-inline">
+            <input class="form-check-input" type="checkbox" name="days_of_week" value="tuesday"> Вт
+          </div>
+          <div class="form-check form-check-inline">
+            <input class="form-check-input" type="checkbox" name="days_of_week" value="wednesday"> Ср
+          </div>
+          <div class="form-check form-check-inline">
+            <input class="form-check-input" type="checkbox" name="days_of_week" value="thursday"> Чт
+          </div>
+          <div class="form-check form-check-inline">
+            <input class="form-check-input" type="checkbox" name="days_of_week" value="friday"> Пт
+          </div>
+          <div class="form-check form-check-inline">
+            <input class="form-check-input" type="checkbox" name="days_of_week" value="saturday"> Сб
+          </div>
+          <div class="form-check form-check-inline">
+            <input class="form-check-input" type="checkbox" name="days_of_week" value="sunday"> Вс
+          </div>
+        </div>
+
+        <!-- Поля для "По конкретным числам" -->
+        <div id="repetitiveDates" style="display: none;">
+          <label class="form-label">Дни месяца (хэштеги по Enter):</label>
+          <!-- Для хранения итоговых значений используем скрытое поле repetitiveDatesHidden. -->
+          <div class="repetitive-dates-container">
+            <input type="text" class="form-control" id="repetitiveDatesInput" placeholder="Например: 1 (нажмите Enter)">
+            <input type="hidden" id="repetitiveDatesHidden" name="dates" value="">
+          </div>
+        </div>
+
+        <!-- Поля для "Через X дней" -->
+        <div id="repetitiveInterval" style="display: none;">
+          <label class="form-label">Введите интервал (в днях):</label>
+          <input type="number" class="form-control" id="repetitiveIntervalDays" name="n_days" placeholder="Введите количество дней">
+        </div>
+
+        <!-- Время начала (опционально) -->
+        <div class="mb-3">
+          <label class="form-label">Время начала (опционально):</label>
+          <input type="time" class="form-control" id="repetitiveStartTime" name="repetitiveStartTime">
+        </div>
+
+        <!-- Продолжительность (минуты, опционально) -->
+        <div class="mb-3">
+          <label class="form-label">Продолжительность (минуты, опционально):</label>
+          <input type="number" class="form-control" id="repetitiveDuration" name="repetitiveDuration">
+        </div>
+
+        <!-- Статус события -->
+        <div class="mb-3">
+          <label class="form-label">Статус события:</label>
+          <select class="form-select" id="repetitiveEventStatus" name="repetitiveEventStatus">
+            <option value="" disabled selected>Выберите статус</option>
+            <option value="incomplete">Не завершено</option>
+            <option value="complete">Завершено</option>
+            <option value="cancelled">Отменено</option>
+            <option value="on_pause">На паузе</option>
+            <option value="in_process">В процессе</option>
+          </select>
+        </div>
+
+        <!-- Переключатель: финансовое или нет -->
+        <div class="form-check form-switch mb-3">
+          <input class="form-check-input" type="checkbox" id="repetitiveIsFinancial" name="repetitiveIsFinancial">
+          <label class="form-check-label" for="repetitiveIsFinancial">Финансовые детали?</label>
+        </div>
+
+        <!-- Блок с финансовыми деталями (скрыт, если чекбокс не включён) -->
+        <div id="repetitiveFinancialDetails" style="display: none;">
+          <!-- Сумма (для расходов) -->
+          <div class="mb-3">
+            <label class="form-label">Сумма (расход):</label>
+            <div class="input-group">
+              <input type="number" class="form-control" id="repetitiveAmount" name="repetitiveAmount" placeholder="Введите сумму" min="0">
+              <span class="input-group-text">₽</span>
+            </div>
+          </div>
+
+          <!-- Выбор аккаунта -->
+          <div class="mb-3">
+            <label class="form-label">Выберите аккаунт:</label>
+            <select class="form-select" id="repetitiveEventAccount" name="repetitiveEventAccount">
+              <option value="" disabled selected>Выберите аккаунт</option>
+              {% for account in accounts %}
+                <option value="{{ account.id }}">{{ account.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div> <!-- repetitiveFinancialDetails -->
+
+      </div>
+
+      <!-- Поля для прихода денег (всегда финансовые) -->
+      <div id="incomeEventFields" style="display: none;">
+        <!-- Дата события -->
+        <div class="mb-3">
+          <label class="form-label">Дата события:</label>
+          <input type="date" class="form-control" id="incomeEventDate" name="incomeEventDate">
+        </div>
+
+        <!-- Время начала (опционально) -->
+        <div class="mb-3">
+          <label class="form-label">Время начала (опционально):</label>
+          <input type="time" class="form-control" id="incomeStartTime" name="incomeStartTime">
+        </div>
+
+        <!-- Продолжительность (минуты, опционально) -->
+        <div class="mb-3">
+          <label class="form-label">Продолжительность (минуты, опционально):</label>
+          <input type="number" class="form-control" id="incomeDuration" name="incomeDuration">
+        </div>
+
+        <!-- Сумма (уже для прихода - положительная) -->
+        <div class="mb-3">
+          <label class="form-label">Сумма (приход):</label>
+          <div class="input-group">
+            <input type="number" class="form-control" id="incomeAmount" name="incomeAmount" placeholder="Введите сумму">
+            <span class="input-group-text">₽</span>
+          </div>
+        </div>
+
+        <!-- Выбор аккаунта -->
+        <div class="mb-3">
+          <label class="form-label">Выберите аккаунт:</label>
+          <select class="form-select" id="incomeEventAccount" name="incomeEventAccount">
+            <option value="" disabled selected>Выберите аккаунт</option>
+            {% for account in accounts %}
+              <option value="{{ account.id }}">{{ account.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <!-- Статус события (вдруг тоже нужно) -->
+        <div class="mb-3">
+          <label class="form-label">Статус события:</label>
+          <select class="form-select" id="incomeEventStatus" name="incomeEventStatus">
+            <option value="" disabled selected>Выберите статус</option>
+            <option value="incomplete">Не завершено</option>
+            <option value="complete">Завершено</option>
+            <option value="cancelled">Отменено</option>
+            <option value="on_pause">На паузе</option>
+            <option value="in_process">В процессе</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Кнопка "Сохранить" в конце -->
+      <div class="text-center mt-4">
+        <button type="submit" class="btn btn-primary">Сохранить</button>
+      </div>
+
+    </div> <!-- formFieldsContainer -->
+
+  </form> <!-- Конец формы -->
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    console.log("DOM полностью загружен!");
+
+    // === ПЕРЕКЛЮЧЕНИЕ РАЗДЕЛОВ ФОРМЫ ПО ВЫБОРУ ТИПА СОБЫТИЯ ===
+    const formFieldsContainer = document.getElementById("formFieldsContainer");
+    const sections = {
+      single: document.getElementById("singleEventFields"),
+      repetitive: document.getElementById("repetitiveEventFields"),
+      income: document.getElementById("incomeEventFields"),
+      // nonFinancial: document.getElementById("nonFinancialEventFields"), // Убрали
+    };
+
+    const radioButtons = document.querySelectorAll('input[name="eventType"]');
+
+    function hideAllSections() {
+      for (const key in sections) {
+        if (sections[key]) {
+          sections[key].style.display = "none";
+        }
+      }
+    }
+
+    radioButtons.forEach((radio) => {
+      radio.addEventListener("change", function () {
+        hideAllSections();
+        formFieldsContainer.style.display = "block";
+        const selectedType = this.value;
+        if (sections[selectedType]) {
+          sections[selectedType].style.display = "block";
+        }
+      });
+    });
+
+    // === ПЕРЕКЛЮЧЕНИЕ ПОЛЕЙ ДЛЯ ПОВТОРЯЮЩЕГОСЯ СОБЫТИЯ (РАДИОКНОПКИ) ===
+    const repetitiveTypeRadios = document.querySelectorAll('input[name="repetitiveTypeRadio"]');
+    const repetitiveDaysOfWeek = document.getElementById("repetitiveDaysOfWeek");
+    const repetitiveDates = document.getElementById("repetitiveDates");
+    const repetitiveInterval = document.getElementById("repetitiveInterval");
+
+    function hideRepetitiveFields() {
+      if (repetitiveDaysOfWeek) repetitiveDaysOfWeek.style.display = "none";
+      if (repetitiveDates) repetitiveDates.style.display = "none";
+      if (repetitiveInterval) repetitiveInterval.style.display = "none";
+    }
+
+    repetitiveTypeRadios.forEach(radio => {
+      radio.addEventListener("change", function () {
+        hideRepetitiveFields();
+        if (this.value === "days_of_week") {
+          repetitiveDaysOfWeek.style.display = "block";
+        } else if (this.value === "very_date") {
+          repetitiveDates.style.display = "block";
+        } else if (this.value === "n_days") {
+          repetitiveInterval.style.display = "block";
+        }
+      });
+    });
+
+    // === ЧЕКБОКС «Финансовые детали?» ДЛЯ ОДНОРАЗОВОГО СОБЫТИЯ ===
+    const singleIsFinancialCheckbox = document.getElementById("singleIsFinancial");
+    const singleFinancialDetails = document.getElementById("singleFinancialDetails");
+
+    if (singleIsFinancialCheckbox) {
+      singleIsFinancialCheckbox.addEventListener("change", function() {
+        if (this.checked) {
+          singleFinancialDetails.style.display = "block";
+        } else {
+          singleFinancialDetails.style.display = "none";
+        }
+      });
+    }
+
+    // === ЧЕКБОКС «Финансовые детали?» ДЛЯ ПОВТОРЯЮЩЕГОСЯ СОБЫТИЯ ===
+    const repetitiveIsFinancialCheckbox = document.getElementById("repetitiveIsFinancial");
+    const repetitiveFinancialDetails = document.getElementById("repetitiveFinancialDetails");
+
+    if (repetitiveIsFinancialCheckbox) {
+      repetitiveIsFinancialCheckbox.addEventListener("change", function() {
+        if (this.checked) {
+          repetitiveFinancialDetails.style.display = "block";
+        } else {
+          repetitiveFinancialDetails.style.display = "none";
+        }
+      });
+    }
+
+    // === НЕ ДАЁМ ВВОДИТЬ ОТРИЦАТЕЛЬНОЕ ЧИСЛО В «СУММУ» ===
+    const amountInputSingle = document.getElementById("singleAmount");
+    if (amountInputSingle) {
+      amountInputSingle.addEventListener("input", function () {
+        if (this.value < 0) {
+          this.value = "";
+        }
+      });
+    }
+    const amountInputRepetitive = document.getElementById("repetitiveAmount");
+    if (amountInputRepetitive) {
+      amountInputRepetitive.addEventListener("input", function () {
+        if (this.value < 0) {
+          this.value = "";
+        }
+      });
+    }
+    const amountInputIncome = document.getElementById("incomeAmount");
+    if (amountInputIncome) {
+      amountInputIncome.addEventListener("input", function () {
+        if (this.value < 0) {
+          this.value = "";
+        }
+      });
+    }
+
+    // === УСТАНОВКА ДЕФОЛТНЫХ ДАТ ДЛЯ ПОВТОРЯЮЩЕГОСЯ СОБЫТИЯ (пример) ===
+    const startDateInput = document.getElementById('repetitiveStartDate');
+    const endDateInput = document.getElementById('repetitiveEndDate');
+    if (startDateInput && endDateInput) {
+      const today = new Date();
+      // Функция для формата YYYY-MM-DD
+      const toIso = (dateObj) => {
+        const year = dateObj.getFullYear();
+        const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+        const day = String(dateObj.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+      };
+      // Сегодня
+      startDateInput.value = toIso(today);
+      // Сегодня + 4 месяца
+      const fourMonthsLater = new Date(today);
+      fourMonthsLater.setMonth(fourMonthsLater.getMonth() + 4);
+      endDateInput.value = toIso(fourMonthsLater);
+    }
+
+    // === ВВОД «По конкретным числам» (хэштеги) ===
+    const repDatesInput = document.getElementById('repetitiveDatesInput');
+    const repDatesHidden = document.getElementById('repetitiveDatesHidden');
+    const repDatesContainer = document.querySelector('.repetitive-dates-container');
+    let daysArray = []; // Храним уникальные дни месяца
+
+    if (repDatesInput) {
+      repDatesInput.addEventListener('keypress', function(event) {
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          const dayValue = repDatesInput.value.trim();
+          if (dayValue) {
+            addDayOfMonth(dayValue);
+            repDatesInput.value = "";
+          }
+        }
+      });
+    }
+
+    function addDayOfMonth(day) {
+      const dayNum = parseInt(day, 10);
+      if (isNaN(dayNum) || dayNum < 1 || dayNum > 31) {
+        alert("Введите число от 1 до 31");
+        return;
+      }
+      // Проверка на дубликаты
+      if (daysArray.includes(dayNum)) {
+        // Уже есть такой день — не добавляем второй раз
+        return;
+      }
+      daysArray.push(dayNum);
+
+      // Создаём «бэдж»
+      const badgeEl = document.createElement('span');
+      badgeEl.classList.add('badge', 'bg-secondary', 'me-2');
+      badgeEl.textContent = dayNum;
+
+      // Кнопка удаления
+      const closeBtn = document.createElement("button");
+      closeBtn.classList.add("btn-close", "ms-2");
+      closeBtn.addEventListener("click", () => {
+        badgeEl.remove();
+        daysArray = daysArray.filter(x => x !== dayNum);
+        updateRepetitiveDatesHidden();
+      });
+      badgeEl.appendChild(closeBtn);
+
+      repDatesContainer.insertBefore(badgeEl, repDatesInput);
+      updateRepetitiveDatesHidden();
+    }
+
+    function updateRepetitiveDatesHidden() {
+      repDatesHidden.value = daysArray.join(',');
+    }
+
+    // === УНИВЕРСАЛЬНЫЙ ВВОД ТЕГОВ (В общих полях) ===
+    const commonTagsInput = document.getElementById('commonTagsInput');
+    const commonTagsHidden = document.getElementById('commonTagsHidden');
+    const commonTagsContainer = document.querySelector('.common-tags-container');
+    let tagsArray = []; // Для хранения уникальных тегов
+
+    if (commonTagsInput) {
+      commonTagsInput.addEventListener("keypress", function (event) {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          const tagValue = commonTagsInput.value.trim();
+          if (tagValue) {
+            addCommonTag(tagValue);
+            commonTagsInput.value = "";
+          }
+        }
+      });
+    }
+
+    function addCommonTag(tag) {
+      // Проверка на дубликаты (делаем в нижнем регистре, чтобы "Abc" и "abc" считались дубликатами)
+      const lowerTag = tag.toLowerCase();
+      // Сравниваем с массивом (где тоже храним всё в lower)
+      const existingLowerTags = tagsArray.map(t => t.toLowerCase());
+      if (existingLowerTags.includes(lowerTag)) {
+        return; // уже есть такой тег
+      }
+
+      // Добавляем «оригинал» в массив
+      tagsArray.push(tag);
+
+      // Создаём «бэдж»
+      const badgeEl = document.createElement("span");
+      badgeEl.classList.add("badge", "bg-primary", "me-2");
+      badgeEl.textContent = tag;
+
+      // Кнопка удаления
+      const closeBtn = document.createElement("button");
+      closeBtn.classList.add("btn-close", "ms-2");
+      closeBtn.addEventListener("click", () => {
+        badgeEl.remove();
+        // Удаляем из массива
+        tagsArray = tagsArray.filter(x => x !== tag);
+        updateCommonTagsHidden();
+      });
+
+      badgeEl.appendChild(closeBtn);
+      commonTagsContainer.insertBefore(badgeEl, commonTagsInput);
+
+      updateCommonTagsHidden();
+    }
+
+    function updateCommonTagsHidden() {
+      // Собираем массив строк в одно поле через запятую
+      commonTagsHidden.value = tagsArray.join(',');
+    }
+  });
+</script>
+{% endblock %}
