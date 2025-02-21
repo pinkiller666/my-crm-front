@@ -4,7 +4,7 @@ from datetime import date, timedelta
 from .models import MoneyEvent, Account, RepetitiveType
 
 class MoneyEventForm(forms.ModelForm):
-    """Форма для создания/редактирования события в стиле Django + дополнительная логика."""
+    """Форма для создания/редактирования события с учётом новых полей модели."""
 
     # Дополнительные поля, которых нет прямо в модели, но они нужны пользователю
     event_type = forms.ChoiceField(
@@ -26,28 +26,24 @@ class MoneyEventForm(forms.ModelForm):
         widget=forms.RadioSelect
     )
 
-    # Для списка дней недели в форме можно использовать CheckboxSelectMultiple
-    # но мы сделаем CharField, чтобы собрать это из JS:
-    weekdays = forms.CharField(required=False)
+    # Для списка дней недели
+    repetition_days_of_week = forms.CharField(required=False)
 
     # Для дат (1, 15 ...) и интервала
-    repetitive_dates = forms.CharField(required=False)
-    repetitive_interval = forms.IntegerField(required=False, min_value=1)
+    repetition_dates_of_month = forms.CharField(required=False)
+    repetition_interval_days = forms.IntegerField(required=False, min_value=1)
 
-    # Чтобы выбрать аккаунт, используем ModelChoiceField
+    # Выбор аккаунта
     account = forms.ModelChoiceField(
         queryset=Account.objects.all(),
         required=True,
         label="Принадлежность бюджета"
     )
 
-    # Хэштеги соберём в одну строку, как у вас в модели (tags = TextField),
-    # но пользователь может добавлять «стандартные» и «кастомные» хэштеги
-    # см. в шаблоне, как это обрабатываем с JS
-    # Здесь в форме поле tags будет скрытым или обычным TextField
+    # Теги, записываемые в одну строку
     tags = forms.CharField(required=False)
 
-    # "На 4 месяца" флажок
+    # Флажок "На 4 месяца"
     auto_four_months = forms.BooleanField(required=False)
 
     class Meta:
@@ -61,28 +57,32 @@ class MoneyEventForm(forms.ModelForm):
             'tags',
 
             # Для одноразового события
-            'event_date',
+            'single_event_date',
 
             # Для повторяющегося события
             'repetition_type',
-            'weekdays',
-            'repetitive_dates',
-            'repetitive_interval',
+            'repetition_days_of_week',
+            'repetition_dates_of_month',
+            'repetition_interval_days',
 
-            'start_date',
-            'end_date',
+            'start_repetition_date',
+            'end_repetition_date',
+
+            # Время выполнения события
+            'doing_start_time',
+            'doing_duration_time',
+            'doing_end_time',
 
             'auto_four_months',
         ]
-        # Тут не указываем status, is_repetitive, repetitive_type напрямую —
-        # они будут установлены в методе save() или clean().
+        # Не указываем event_status и event_is_active — они устанавливаются в `save()`.
 
     def clean(self):
+        """Валидация данных перед сохранением."""
         cleaned_data = super().clean()
 
-        # Если выбрано повторяющееся событие
+        # Проверяем, если выбрано повторяющееся событие
         if cleaned_data.get('event_type') == 'repetitive':
-            # Тогда убедимся, что repetition_type заполнен
             rep_type = cleaned_data.get('repetition_type')
             if not rep_type:
                 self.add_error('repetition_type', 'Выберите тип повторения')
@@ -90,52 +90,49 @@ class MoneyEventForm(forms.ModelForm):
         return cleaned_data
 
     def save(self, commit=True):
-        """Переопределяем save, чтобы заполнить поля модели
-        в соответствии с выбранным типом события."""
+        """Обрабатываем сохранение формы с учётом типа события."""
         instance: MoneyEvent = super().save(commit=False)
 
         # event_type -> is_repetitive
         event_type = self.cleaned_data.get('event_type')
         if event_type == 'single':
             instance.is_repetitive = False
-            # На всякий случай, чтобы не засорять
             instance.repetitive_type = None
-            instance.n_days = 0
-            instance.dates = ""
-            instance.days_of_week = ""
+            instance.repetition_interval_days = 0
+            instance.repetition_dates_of_month = ""
+            instance.repetition_days_of_week = ""
         else:
-            # repetitive
+            # Повторяющееся событие
             instance.is_repetitive = True
             rep_type = self.cleaned_data.get('repetition_type')
 
             if rep_type == 'weekdays':
                 instance.repetitive_type = RepetitiveType.DAYS_OF_WEEK.value
-                # из формы weekdays (например, "Понедельник,Вторник")
-                instance.days_of_week = self.cleaned_data.get('weekdays', "")
-                instance.dates = ""
-                instance.n_days = 0
+                instance.repetition_days_of_week = self.cleaned_data.get('repetition_days_of_week', "")
+                instance.repetition_dates_of_month = ""
+                instance.repetition_interval_days = 0
             elif rep_type == 'dates':
                 instance.repetitive_type = RepetitiveType.VERY_DATE.value
-                instance.dates = self.cleaned_data.get('repetitive_dates', "")
-                instance.days_of_week = ""
-                instance.n_days = 0
+                instance.repetition_dates_of_month = self.cleaned_data.get('repetition_dates_of_month', "")
+                instance.repetition_days_of_week = ""
+                instance.repetition_interval_days = 0
             elif rep_type == 'interval':
                 instance.repetitive_type = RepetitiveType.N_DAYS.value
-                instance.n_days = self.cleaned_data.get('repetitive_interval') or 0
-                instance.days_of_week = ""
-                instance.dates = ""
+                instance.repetition_interval_days = self.cleaned_data.get('repetition_interval_days') or 0
+                instance.repetition_days_of_week = ""
+                instance.repetition_dates_of_month = ""
             else:
-                instance.repetitive_type = None  # неизвестный, но теоретически не должно быть
+                instance.repetitive_type = None  # На случай ошибок
 
-        # Если выставлен "На 4 месяца" - можно автокорректировать end_date
+        # Если выставлен "На 4 месяца", корректируем `end_repetition_date`
         if self.cleaned_data.get('auto_four_months'):
-            instance.end_date = instance.start_date + timedelta(days=120)
+            instance.end_repetition_date = instance.start_repetition_date + timedelta(days=120)
 
-        # status по умолчанию: incomplete (если в модели не стоит default, зададим)
-        if not instance.status:
-            instance.status = 'incomplete'
+        # Устанавливаем статус по умолчанию
+        if not instance.event_status:
+            instance.event_status = 'incomplete'
 
-        # Сохраняем (commit=True) и возвращаем объект
+        # Сохраняем объект
         if commit:
             instance.save()
         return instance

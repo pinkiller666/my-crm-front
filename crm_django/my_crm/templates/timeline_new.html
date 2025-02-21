@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+
+{% block title %}
+    Woof NewTimeLine TestMod
+{% endblock %}
+
+{% block content %}
+    <div class="timeline-wrapper">
+        <div class="timeline-container">
+            <div class="timeline-line"></div>
+
+            {% for day in days %}
+            <div class="day-group" style="left: {{ day.position }}%;">
+                <div class="day-tick {% if day.is_today %}today{% endif %}"></div>
+                <div class="day-label {% if day.is_today %}today{% endif %}">{{ day.day_number }}</div>
+                <div class="weekday-label {% if day.is_today %}today{% endif %}">{{ day.weekday_short }}</div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+
+    <style>
+        /* Wrapper to center the timeline */
+        .timeline-wrapper {
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            margin-top: 40px;
+        }
+
+        /* Main container for the timeline */
+        .timeline-container {
+            width: 90%;
+            max-width: 1000px;
+            position: relative;
+            height: 150px !important;
+            min-height: 150px !important;
+            overflow: hidden;
+            border: 2px solid red; /* TEMPORARY: REMOVE AFTER TESTING */
+            background-color: rgba(255, 0, 0, 0.05); /* TEMPORARY */
+        }
+
+        /* Timeline line */
+        .timeline-line {
+            position: absolute;
+            width: 100%;
+            height: 2px;
+            background-color: #ccc;
+            top: 50%;
+            transform: translateY(-50%);
+            border: 1px solid blue; /* TEMPORARY */
+        }
+
+        /* Group of day elements */
+        .day-group {
+            position: absolute;
+            text-align: center;
+            transform: translateX(-50%);
+            bottom: 30px;
+            width: 50px; /* Slightly wider for better visibility */
+            border: 1px solid green; /* TEMPORARY */
+            background-color: rgba(0, 255, 0, 0.2); /* TEMPORARY */
+        }
+
+        /* Day tick mark */
+        .day-tick {
+            width: 4px;
+            height: 20px;
+            background-color: #888;
+            margin: 0 auto;
+            border: 1px solid yellow; /* TEMPORARY */
+        }
+
+        /* Day number */
+        .day-label {
+            font-size: 0.9rem;
+            color: #666;
+            margin-top: 5px;
+            white-space: nowrap;
+            border: 1px solid black; /* TEMPORARY */
+        }
+
+        /* Weekday label */
+        .weekday-label {
+            font-size: 0.85rem;
+            color: #999;
+            margin-top: 3px;
+            white-space: nowrap;
+            border: 1px solid purple; /* TEMPORARY */
+        }
+
+        /* Highlight today's date */
+        .today .day-tick {
+            background-color: #007AFF;
+            height: 25px;ы
+        }
+
+        .today .day-label {
+            color: #007AFF;
+            font-weight: bold;
+        }
+
+        .today .weekday-label {
+            color: #007AFF;
+            font-weight: bold;
+        }
+    </style>
+
+{% endblock %}

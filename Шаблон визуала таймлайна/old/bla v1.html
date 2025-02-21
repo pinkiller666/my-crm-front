@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Таймлайн с событиями</title>
+    <style>
+        /* Основной контейнер */
+        .timeline-wrapper {
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* Контейнер таймлайна */
+        .timeline-container {
+            width: 98%;
+            position: relative;
+            height: 30vh;
+            min-height: 150px;
+            overflow: hidden;
+            margin: 0 auto;
+        }
+
+        /* Линия таймлайна */
+        .timeline-line {
+            position: absolute;
+            width: 100%;
+            height: 2px;
+            background-color: #ccc;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+
+        /* Подсветка сегодняшнего дня (увеличенная, с легким свечением) */
+        .today-highlight {
+            position: absolute;
+            height: 6px;
+            background: linear-gradient(to right, #ffccd5, #ff99aa);
+            top: 50%;
+            transform: translateY(-50%);
+            z-index: -1;
+            border-radius: 3px;
+            box-shadow: 0 0 15px rgba(255, 153, 170, 0.6);
+        }
+
+        /* Засечка (вертикальная линия) */
+        .day-tick {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 2px;
+            height: 20px;
+            background-color: #888;
+        }
+
+        /* Блок с датой/днём недели */
+        .day-label-group {
+            position: absolute;
+            text-align: center;
+            transform: translateX(-50%);
+            top: calc(50% + 25px);
+        }
+
+        .day-label,
+        .weekday-label {
+            font-size: 1rem;
+            color: #666;
+            margin-top: 5px;
+            white-space: nowrap;
+        }
+
+        /* События (кружочки) */
+        .event-marker {
+            width: 12px;
+            height: 12px;
+            border: 2px solid #ff99aa;
+            border-radius: 50%;
+            position: absolute;
+            top: calc(50% - 25px);
+            transform: translate(-50%, -50%);
+            transition: transform 0.2s ease-in-out;
+            cursor: pointer;
+        }
+        .event-marker:hover {
+            transform: translate(-50%, -50%) scale(1.5);
+        }
+
+        /* Подпись события (изначально прозрачная) */
+        .event-label {
+            position: absolute;
+            top: calc(50% - 40px); /* Над кружком */
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 0.9rem;
+            color: #333;
+            background: rgba(255, 255, 255, 0.8);
+            padding: 4px 8px;
+            border-radius: 6px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+            opacity: 0; /* Скрыто изначально */
+            transition: opacity 0.3s ease-in-out;
+            white-space: nowrap;
+        }
+
+    </style>
+</head>
+<body>
+<div class="timeline-wrapper">
+    <div class="timeline-container">
+        <div class="timeline-line"></div>
+    </div>
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const daysInMonth = 30;
+    const todayDate = 9;
+    
+    const events = {
+        2:  ["Уборщица", "Психолог"],
+        7:  ["Сдача отчёта", "Дедлайн по проекту", "Кушать шоколад"],
+        9:  ["Важный звонок"]
+    };
+
+    let baseWidth = 3;
+    let totalTasks = 0;
+
+    for (let i = 1; i <= daysInMonth; i++) {
+        if (events[i]) {
+            totalTasks += events[i].length;
+        }
+    }
+
+    let rawWidths = [];
+    for (let i = 1; i <= daysInMonth; i++) {
+        let taskCount = events[i] ? events[i].length : 0;
+        let extraWidth = totalTasks ? (taskCount / totalTasks) * (100 - daysInMonth * baseWidth) : 0;
+        rawWidths.push(baseWidth + extraWidth);
+    }
+
+    let totalRawWidth = rawWidths.reduce((acc, w) => acc + w, 0);
+    let dayWidths = rawWidths.map(w => (w / totalRawWidth) * 100);
+
+    const timelineContainer = document.querySelector('.timeline-container');
+    let html = "";
+    let currentLeft = 0;
+
+    for (let day = 1; day <= daysInMonth; day++) {
+        let w = dayWidths[day - 1];
+        let dayLeft = currentLeft;
+        let dayRight = currentLeft + w;
+        let dayCenter = (dayLeft + dayRight) / 2;
+
+        html += `<div class="day-tick" style="left: ${dayLeft}%;"></div>`;
+
+        if (day === todayDate) {
+            html += `<div class="today-highlight" style="left: ${dayLeft}%; width: ${w}%;"></div>`;
+        }
+
+        let dateObj = new Date(2025, 1, day);
+        let weekdayStr = dateObj.toLocaleDateString("ru-RU", { weekday: "short" });
+        html += `
+            <div class="day-label-group" style="left: ${dayCenter}%;"><div class="day-label">${day}</div><div class="weekday-label">${weekdayStr}</div></div>
+        `;
+
+        if (events[day]) {
+            let numEvents = events[day].length;
+            for (let i = 0; i < numEvents; i++) {
+                let frac = (i + 1) / (numEvents + 1);
+                let eventX = dayLeft + frac * (dayRight - dayLeft);
+                let eventText = events[day][i];
+
+                html += `
+                    <div class="event-marker" style="left: ${eventX}%;" data-event="${eventText}"></div>
+                    <div class="event-label" style="left: ${eventX}%;">${eventText}</div>
+                `;
+            }
+        }
+        currentLeft = dayRight;
+    }
+
+    html += `<div class="day-tick" style="left: ${currentLeft}%;"></div>`;
+    timelineContainer.innerHTML += html;
+
+    document.addEventListener("mousemove", function (event) {
+        let mouseX = event.clientX;
+        let mouseY = event.clientY;
+        let radius = 200; 
+
+        document.querySelectorAll(".event-marker").forEach(marker => {
+            let rect = marker.getBoundingClientRect();
+            let markerX = rect.left + rect.width / 2;
+            let markerY = rect.top + rect.height / 2;
+            let distance = Math.sqrt(Math.pow(mouseX - markerX, 2) + Math.pow(mouseY - markerY, 2));
+
+            let label = marker.nextElementSibling;
+            if (distance < radius) {
+                label.style.opacity = "1";
+            } else {
+                label.style.opacity = "0";
+            }
+        });
+    });
+});
+</script>
+</body>
+</html>

@@ -46,6 +46,8 @@
           <!-- Ссылка на админку -->
           <li class="nav-item">
             <a class="nav-link" href="/admin/">Админка</a>
+          </li><li class="nav-item">
+            <a class="nav-link" href="{% url 'timeline_new' %}">TimelineTEST</a>
           </li>
         </ul>
       </div>
@@ -53,6 +55,17 @@
   </nav>
         </header>
         <div class="content pure-u-1 pure-u-md-3-4">
+                <!-- Блок для вывода сообщений -->
+    <div class="container mt-3">
+        {% if messages %}
+            {% for message in messages %}
+                <div class="alert {% if message.tags %}alert-{{ message.tags }}{% endif %} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Закрыть"></button>
+                </div>
+            {% endfor %}
+        {% endif %}
+    </div>
             {% block content %}{% endblock %}
         </div>
     </main>

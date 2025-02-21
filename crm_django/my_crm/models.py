@@ -40,15 +40,24 @@ class MoneyEvent(models.Model):
         blank=True,
         null=True
     )
-    n_days = models.IntegerField(blank=True, null=True)
-    dates = models.CharField(max_length=255, default="", blank=True)
-    days_of_week = models.CharField(max_length=255, default="", blank=True)
-    start_date = models.DateField(default=timezone.now, null=True, blank=True)   # дата начала
-    duration = models.IntegerField(default=0, null=True, blank=True)  # продолжительность в минутах
-    end_date = models.DateField(default=one_year_from_now, blank=True, null=True)  # дата окончания
-    is_active = models.BooleanField(default=True)
-    start_time = models.TimeField(blank=True, null=True)
-    end_time = models.TimeField(blank=True, null=True)
+
+    # как повторяются
+    is_repetitive = models.BooleanField(default=False)
+    repetition_interval_days = models.IntegerField(blank=True, null=True)
+    repetition_dates_of_month = models.CharField(max_length=255, default="", blank=True, null=True)
+    repetition_days_of_week = models.CharField(max_length=255, default="", blank=True, null=True)
+
+    # поля касающееся времени
+        # даты
+    single_event_date = models.DateTimeField(default=timezone.now)
+    start_repetition_date = models.DateField(default=timezone.now, null=True, blank=True)   # дата начала
+    end_repetition_date = models.DateField(default=one_year_from_now, blank=True, null=True)  # дата окончания
+        # часы, время выполнения
+    doing_start_time = models.TimeField(blank=True, null=True)
+    doing_duration_time = models.IntegerField(default=0, null=True, blank=True)  # продолжительность в минутах
+    doing_end_time = models.TimeField(blank=True, null=True)
+
+    # описательные поля
     name = models.CharField(max_length=255, default="")
     amount = models.DecimalField(
         max_digits=10,
@@ -59,7 +68,13 @@ class MoneyEvent(models.Model):
     )
     comment = models.TextField(blank=True, null=True)
     tags = models.TextField(default="", blank=True)
-    is_repetitive = models.BooleanField(default=False)
+    event_is_active = models.BooleanField(default=True)
+    event_status = models.CharField(
+        max_length=50,
+        choices=CompletionStatus.choices,
+        default=CompletionStatus.INCOMPLETE
+    )
+
     account = models.ForeignKey(
         Account,
         related_name='money_events',
@@ -67,12 +82,19 @@ class MoneyEvent(models.Model):
         null=True,  # Разрешаем хранить NULL
         blank=True  # Разрешаем не заполнять в формах
     )
-    created_at = models.DateTimeField(default=timezone.now)
-    edited_at = models.DateTimeField(default=timezone.now)
-    event_date = models.DateTimeField(default=timezone.now)
-    updated_at = models.DateTimeField(default=timezone.now)
-    status = models.CharField(
-        max_length=50,
-        choices=CompletionStatus.choices,
-        default=CompletionStatus.INCOMPLETE
+
+    # внутренние данные о записи
+    created_at_inner_info = models.DateTimeField(default=timezone.now)
+    edited_at_inner_info = models.DateTimeField(default=timezone.now)
+    updated_at_inner_info = models.DateTimeField(default=timezone.now)
+
+    parent = models.ForeignKey(
+        "self",  # Self-referential foreign key
+        on_delete=models.CASCADE,  # Deleting the parent removes all related instances
+        related_name="children",  # Allows reverse access via parent.children.all()
+        null=True,  # Allow null if it's the first event in a series
+        blank=True
     )
+
+    def __str__(self):
+        return self.name
