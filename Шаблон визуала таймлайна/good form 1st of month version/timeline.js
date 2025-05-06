@@ -15,7 +15,7 @@ document.addEventListener("DOMContentLoaded", function () {
     timelineContainer.innerHTML = '<div class="timeline-line"></div>'; // Очищаем старый таймлайн
 
     let baseWidth = 100 / (daysCount * 2);
-    const widthMult = 1.;
+    const widthMult = 1.4;
     baseWidth = baseWidth * widthMult;
     let totalTasks = Object.values(events).flat().length;
 

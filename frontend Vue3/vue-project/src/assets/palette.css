@@ -1,0 +1,247 @@
+/* 1) Определяем семантические переменные по умолчанию (classic) */
+:root,
+[data-theme="classic"] {
+    --bg-main: #ffffff;
+    --bg-main-rgb: 255, 255, 255;
+
+    --bg-secondary: #e2e4e6;
+    --bg-secondary-rgb: 226, 228, 230;
+
+    --text-main: #303133;
+    --text-main-rgb: 48, 49, 51;
+
+    --text-secondary: #606266;
+    --text-secondary-rgb: 96, 98, 102;
+
+    --border-color: #dcdfe6;
+    --border-color-rgb: 220, 223, 230;
+
+    --color-primary: #409eff;
+    --color-primary-rgb: 64, 158, 255;
+
+    --color-primary-hover: #337ecc;
+    --color-primary-hover-rgb: 51, 126, 204;
+
+    --color-success: #67c23a;
+    --color-success-rgb: 103, 194, 58;
+
+    --color-warning: #e6a23c;
+    --color-warning-rgb: 230, 162, 60;
+
+    --el-color-primary: var(--color-success);
+    --el-color-primary-light-3: var(--color-primary-hover);
+}
+
+[data-theme="wood"] {
+    --bg-main: #ffffff;
+    --bg-main-rgb: 255, 255, 255;
+
+    --bg-secondary: #ede7db;
+    --bg-secondary-rgb: 237, 231, 219;
+
+    --text-main: #99715b;
+    --text-main-rgb: 153, 113, 91;
+
+    --text-secondary: #bc9366;
+    --text-secondary-rgb: 188, 147, 102;
+
+    --border-color: #ede7db;
+    --border-color-rgb: 237, 231, 219;
+
+    --color-primary: #99715b;
+    --color-primary-rgb: 153, 113, 91;
+
+    --color-primary-hover: #8b4f5b;
+    --color-primary-hover-rgb: 139, 79, 91;
+
+    --color-success: #85a26c;
+    --color-success-rgb: 133, 162, 108;
+
+    --color-warning: #a1b463;
+    --color-warning-rgb: 161, 180, 99;
+
+    --el-color-primary: var(--color-success);
+    --el-color-primary-light-3: var(--color-primary-hover);
+}
+
+[data-theme="bubble-gum"] {
+    --bg-main: #ffe6f3;
+    --bg-main-rgb: 255, 230, 243;
+
+    --bg-secondary: #ca337e;
+    --bg-secondary-rgb: 202, 51, 126;
+
+    --text-main: #ffe6f3;
+    --text-main-rgb: 255, 230, 243;
+
+    --text-secondary: #c34a9e;
+    --text-secondary-rgb: 195, 74, 158;
+
+    --border-color: #ffcce6;
+    --border-color-rgb: 255, 204, 230;
+
+    --color-primary: #d94aa3;
+    --color-primary-rgb: 217, 74, 163;
+
+    --color-primary-hover: #b33a88;
+    --color-primary-hover-rgb: 179, 58, 136;
+
+    --color-success: #ffffff;
+    --color-success-rgb: 255, 255, 255;
+
+    --color-warning: #ff7b9c;
+    --color-warning-rgb: 255, 123, 156;
+
+    --el-color-primary: var(--color-success);
+    --el-color-primary-light-3: var(--color-primary-hover);
+}
+
+[data-theme="dark"] {
+    --bg-main: #141414;
+    --bg-main-rgb: 20, 20, 20;
+
+    --bg-secondary: #393939;
+    --bg-secondary-rgb: 57, 57, 57;
+
+    --text-main: #c1c1c1;
+    --text-main-rgb: 193, 193, 193;
+
+    --text-secondary: #9e9e9e;
+    --text-secondary-rgb: 158, 158, 158;
+
+    --color-success: #ff9800;
+    --color-success-rgb: 255, 152, 0;
+
+    --color-warning: #ff9800;
+    --color-warning-rgb: 255, 152, 0;
+
+    --color-primary: #ff9800;
+    --color-primary-rgb: 255, 152, 0;
+
+    --color-primary-hover: #ffffff;
+    --color-primary-hover-rgb: 255, 255, 255;
+
+    --el-color-primary: var(--color-success);
+    --el-color-primary-light-3: var(--color-primary-hover);
+}
+
+[data-theme="earth"] {
+    --bg-main: #f5e4d4;
+    --bg-main-rgb: 245, 228, 212;
+
+    --bg-secondary: #b97f4d;
+    --bg-secondary-rgb: 185, 127, 77;
+
+    --text-main: #3e2a14;
+    --text-main-rgb: 62, 42, 20;
+
+    --text-secondary: #705b4b;
+    --text-secondary-rgb: 112, 91, 75;
+
+    --border-color: #ddd0c2;
+    --border-color-rgb: 221, 208, 194;
+
+    --color-primary: #b97f4d;
+    --color-primary-rgb: 185, 127, 77;
+
+    --color-primary-hover: #a56f3c;
+    --color-primary-hover-rgb: 165, 111, 60;
+
+    --color-success: #85a26c;
+    --color-success-rgb: 133, 162, 108;
+
+    --color-warning: #d99a5b;
+    --color-warning-rgb: 217, 154, 91;
+
+    --el-color-primary: var(--color-success);
+    --el-color-primary-light-3: var(--color-primary-hover);
+}
+
+
+html,
+body {
+    background: var(--bg-main);
+    color:      var(--text-main);
+    /* шрифт, line‑height и т.д. можете оставить как было */
+}
+
+:root {
+    --radius-card: 8px;
+}
+
+/* карточки, модалки, выпадашки Element Plus */
+.el-card,
+.el-dialog,
+.el-dropdown-menu {
+    background: var(--bg-secondary) !important;
+    color:      var(--text-main)   !important;
+    border: 1px solid var(--border-color) !important;
+    border-radius: var(--radius-card);
+}
+
+/* ссылки и кнопки */
+a {
+    color: var(--color-primary);
+}
+a:hover {
+    color: var(--color-primary-hover);
+}
+
+.el-button--primary {
+    background:    var(--color-primary);
+    border-color:  var(--color-primary);
+}
+.el-button--primary:is(:hover, :active, :focus) {
+    background:    var(--color-primary-hover);
+    border-color:  var(--color-primary-hover);
+}
+
+.navbar .el-tabs--card > .el-tabs__header,
+.navbar .el-tabs__header,
+.navbar .el-tabs__nav,
+.navbar .el-tabs__item,
+.navbar .el-tabs__nav-wrap::after {
+    border: none !important;
+    box-shadow: none !important;
+}
+
+:deep(.el-tabs__item.is-active),
+:deep(.el-tabs__item:hover) {
+    color: var(--color-primary) !important;
+}
+
+:deep(.navbar.el-tabs--card),
+:deep(.navbar.el-tabs--card > .el-tabs__content) {
+    background: var(--bg-secondary) !important;
+    border: none !important;
+    box-shadow: none !important;
+}
+
+/* Заголовок табов */
+:deep(.navbar .el-tabs__header) {
+    background: var(--bg-secondary) !important;
+    font-size: 28px;
+}
+
+:deep(.el-progress)
+{
+    background: var(--bg-secondary) !important;
+}
+
+:deep(.el-progress-bar__inner) {
+    background-color: var(--color-success) !important;
+}
+
+.el-button--primary {
+    background-color: var(--color-primary) !important;
+    border-color: var(--color-primary) !important;
+    color: white; /* или var(--text-on-primary), если ты заведёшь такую переменную */
+}
+
+.el-button--primary:hover,
+.el-button--primary:focus,
+.el-button--primary:active {
+    background-color: var(--color-primary-hover) !important;
+    border-color: var(--color-primary-hover) !important;
+}
+

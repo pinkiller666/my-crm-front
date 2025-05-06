@@ -1,2 +1,5 @@
 Django==5.1.5
 plotly==5.24.1
+
+djangorestframework~=3.16.0
+django-recurrence~=1.11.1

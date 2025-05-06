@@ -1,8 +1,7 @@
-from datetime import timedelta
+from decimal import Decimal
 from django.db import models
 from django.utils import timezone
-from decimal import Decimal
-
+from recurrence.fields import RecurrenceField
 
 # Выбираем TextChoices, чтобы хранить строки (аналог value в Enum)
 class CompletionStatus(models.TextChoices):
@@ -12,89 +11,98 @@ class CompletionStatus(models.TextChoices):
     ON_PAUSE = 'on_pause', 'ON_PAUSE'
     IN_PROCESS = 'in_process', 'IN_PROCESS'
 
-
-class RepetitiveType(models.TextChoices):
-    DAYS_OF_WEEK = 'days_of_week', 'days_of_week'
-    VERY_DATE = 'very_date', 'very_date'
-    N_DAYS = 'n_days', 'n_days'
-
-
 def one_year_from_now():
-    return (timezone.now() + timedelta(days=365)).date()
+    return timezone.now().date().replace(year=timezone.now().year + 1)
 
 
 class Account(models.Model):
     name = models.CharField(max_length=255, unique=True)
     description = models.TextField(blank=True, null=True)
-    current_amount = models.IntegerField(default=0)
-    is_old = models.BooleanField(default=False)
+    balance = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    is_archived = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
         return self.name
 
 
-class MoneyEvent(models.Model):
-    repetitive_type = models.CharField(
-        max_length=50,
-        choices=RepetitiveType.choices,
-        blank=True,
-        null=True
-    )
 
-    # как повторяются
-    is_repetitive = models.BooleanField(default=False)
-    repetition_interval_days = models.IntegerField(blank=True, null=True)
-    repetition_dates_of_month = models.CharField(max_length=255, default="", blank=True, null=True)
-    repetition_days_of_week = models.CharField(max_length=255, default="", blank=True, null=True)
 
-    # поля касающееся времени
-        # даты
-    single_event_date = models.DateTimeField(default=timezone.now)
-    start_repetition_date = models.DateField(default=timezone.now, null=True, blank=True)   # дата начала
-    end_repetition_date = models.DateField(default=one_year_from_now, blank=True, null=True)  # дата окончания
-        # часы, время выполнения
-    doing_start_time = models.TimeField(blank=True, null=True)
-    doing_duration_time = models.IntegerField(default=0, null=True, blank=True)  # продолжительность в минутах
-    doing_end_time = models.TimeField(blank=True, null=True)
 
-    # описательные поля
-    name = models.CharField(max_length=255, default="")
+class Event(models.Model):
+    name = models.CharField(max_length=255)
+    description = models.TextField(blank=True, null=True)
     amount = models.DecimalField(
         max_digits=10,
         decimal_places=2,
         null=True,  # NULL означает не денежное событие
         blank=True,
-        default=Decimal("-0.01")  # Стандартное значение. Показывает что по умолчанию ивент = трата
+        default=Decimal('-0.01')  # По умолчанию считается тратой
     )
-    comment = models.TextField(blank=True, null=True)
-    tags = models.TextField(default="", blank=True)
-    event_is_active = models.BooleanField(default=True)
-    event_status = models.CharField(
-        max_length=50,
-        choices=CompletionStatus.choices,
-        default=CompletionStatus.INCOMPLETE
-    )
-
     account = models.ForeignKey(
         Account,
-        related_name='money_events',
-        on_delete=models.CASCADE,
-        null=True,  # Разрешаем хранить NULL
-        blank=True  # Разрешаем не заполнять в формах
-    )
-
-    # внутренние данные о записи
-    created_at_inner_info = models.DateTimeField(default=timezone.now)
-    edited_at_inner_info = models.DateTimeField(default=timezone.now)
-    updated_at_inner_info = models.DateTimeField(default=timezone.now)
-
-    parent = models.ForeignKey(
-        "self",  # Self-referential foreign key
-        on_delete=models.CASCADE,  # Deleting the parent removes all related instances
-        related_name="children",  # Allows reverse access via parent.children.all()
-        null=True,  # Allow null if it's the first event in a series
+        related_name='events',
+        on_delete=models.SET_NULL,
+        null=True,
         blank=True
+    )
+    recurrence = RecurrenceField(blank=True, null=True, include_dtstart=False)
+    start_datetime = models.DateTimeField(default=timezone.now)
+    end_datetime = models.DateTimeField(blank=True, null=True)
+    duration_minutes = models.PositiveIntegerField(blank=True, null=True)
+    is_active = models.BooleanField(default=True)
+    tags = models.JSONField(default=list, blank=True)
+    comment = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    status = models.CharField(
+            max_length=50,
+            choices=CompletionStatus.choices,
+            default=CompletionStatus.INCOMPLETE
     )
 
     def __str__(self):
         return self.name
+
+
+class EventInstance(models.Model):
+        """Хранит изменения фейковых событий (экземпляров)"""
+        parent_event = models.ForeignKey('Event', on_delete=models.CASCADE, related_name='instances')
+        instance_datetime = models.DateTimeField()  # Дата и время конкретного экземпляра
+        status = models.CharField(
+            max_length=50,
+            choices=CompletionStatus.choices,
+            default=CompletionStatus.INCOMPLETE
+        )
+        modified_at = models.DateTimeField(auto_now=True)  # Когда изменялось
+
+        def __str__(self):
+            return f"{self.parent_event.name} ({self.instance_datetime.strftime('%Y-%m-%d %H:%M')})"
+
+
+class Artist(models.Model):
+    name = models.CharField(max_length=10, unique=True)
+
+    def __str__(self):
+        return self.name
+
+
+class AcceptedCommission(models.Model):
+    artist = models.ForeignKey(Artist, on_delete=models.CASCADE, related_name="commissions")
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    accepted_at = models.DateField(auto_now_add=True)
+    comment = models.TextField(max_length=500, blank=True)
+
+    def __str__(self):
+        return f"{self.artist.name} — {self.amount} ₽ — {self.accepted_at}"
+
+class MonthGoal(models.Model):
+    year = models.IntegerField()
+    month = models.IntegerField()
+    goal = models.IntegerField(null=False, default=10000)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=['year', 'month'], name='unique_month_goal')
+        ]
