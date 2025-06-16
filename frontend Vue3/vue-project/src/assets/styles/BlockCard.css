@@ -1,0 +1,131 @@
+.block-v1 {
+    padding: 0.5rem;
+    --el-color-primary: var(--color-success);
+}
+
+.block-field-label-v1 {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+    margin-bottom: 0rem;
+    user-select: none;
+}
+
+.block-amount-row-v1 {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 0rem;
+}
+
+.block-amount-row-v1 .input-field {
+    flex: 0 0 120px;
+}
+
+.block-input-field-v1 {
+    margin-bottom: 0.5rem;
+}
+
+.block-fade-slide-enter-active,
+.block-fade-slide-leave-active {
+    transition: all 0.5s ease;
+}
+
+.block-fade-slide-enter-from,
+.block-fade-slide-leave-to {
+    opacity: 0;
+    transform: translateY(-10px);
+}
+
+.block-fade-slide-enter-to,
+.block-fade-slide-leave-from {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.block-header-adjustments-v1 {
+    font-size: 0.9rem;
+    font-weight: 400;
+    color: color-mix(in srgb, var(--text-main) 40%, var(--bg-main) 60%) !important;
+    border-color: transparent;
+    transition: all 0.3s ease;
+}
+
+.block-header-adjustments-v1:hover {
+    color: var(--color-primary) !important;
+    background-color: color-mix(in srgb, var(--color-primary) 20%, var(--bg-main) 80%) !important;
+}
+
+.block-header-adjustments-v1.active{
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: var(--color-primary) !important;
+    background-color: color-mix(in srgb, var(--color-primary) 20%, var(--bg-main) 80%) !important;
+    border-color: transparent !important;
+}
+
+.block-header-adjustments-v1.active:hover {
+    background-color: color-mix(in srgb, var(--color-primary) 40%, var(--bg-main) 60%) !important;
+}
+
+/* ── СТРЕЛКА ────────────────────────────────── */
+.block-header-dropdown-icon {
+    margin-left: 0.5rem;
+    transition: transform 0.3s ease;
+}
+
+.block-header-adjustments-v1.active .block-header-dropdown-icon {
+    transform: rotate(180deg);
+}
+
+.block-header-v1 {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    width: 100%;
+    transition: all 0.3s ease;
+}
+
+/* ── ЦЕНТРИРОВАНИЕ заголовка при раскрытии ─── */
+.block-header-v1.active {
+    justify-content: center;
+}
+
+/* ── Повторяемость: числа ─────────────────────── */
+.block-number .el-input__inner {
+    text-align: center;
+    font-weight: 500;
+    width: 60px;
+    padding: 0.25rem 0.5rem;
+}
+
+/* Кнопка + Добавить число */
+.block-button-common  {
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--color-primary);
+    padding: 0.25rem 1rem;
+    border: 1px solid var(--color-primary);
+    background-color: transparent !important;
+    border-radius: 6px;
+    margin-top: 0rem;
+}
+
+.block-button-common:hover {
+    background-color: color-mix(in srgb, var(--color-primary) 20%, var(--bg-main) 80%);
+}
+
+/* Человеко-подобное описание */
+.block-description-text {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    background-color: color-mix(in srgb, var(--bg-main) 80%, var(--color-primary) 5%);
+    padding: 0.75rem 1rem;
+    border-radius: var(--radius-card);
+    margin-top: 0.25rem;
+    white-space: pre-line;
+}
+
+

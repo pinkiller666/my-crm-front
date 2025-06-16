@@ -16,14 +16,30 @@ from django.utils.timezone import make_aware
 from django.db.models import Q
 from .one_month_check import get_main_month
 from .api.progress_api import get_month_progress, get_artist_for_progres, get_month_progress_full
+from .weekdays import Weekday
 
 
 from django.utils.timezone import make_aware, is_naive
 from datetime import datetime, timedelta
 from django.http import JsonResponse
 from django.utils import timezone
-from .models import Event, EventInstance
 from .models import Artist, AcceptedCommission
+from rest_framework import viewsets
+from .serializers import EventSerializer
+
+from .utils.schedule_helper import generate_day_types, return_pattern, return_groups_by_pattern
+from django.contrib.auth import get_user_model
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
+from rest_framework import status
+
+from .models import MonthSchedule
+
+from rest_framework import viewsets
+from .models import Task
+from .serializers import TaskSerializer
+
+User = get_user_model()
 
 
 def event_list(request):
@@ -319,3 +335,84 @@ def add_commission(request):
 @renderer_classes([JSONRenderer])
 def progress_summary_full(request):
     return Response(get_month_progress_full())
+
+
+class EventViewSet(viewsets.ModelViewSet):
+    queryset = Event.objects.all().order_by('-start_datetime')
+    serializer_class = EventSerializer
+
+
+@api_view(['GET'])
+def schedule_preview(request):
+    """
+    Возвращает предварительный просмотр расписания за указанный год и месяц.
+    В ответе:
+    - список дней с типами (work/off),
+    - pattern для фронта,
+    - группы (размеры логических блоков).
+    """
+    user_id = request.query_params.get('user')
+
+    try:
+        year = int(request.query_params.get('year'))
+        month = int(request.query_params.get('month'))
+        user_id = int(user_id) if user_id is not None else None
+    except (ValueError, TypeError):
+        return Response({'error': 'Неверные параметры year/month/user'}, status=400)
+
+    if user_id is None:
+        return Response({'error': 'Параметр user обязателен'}, status=400)
+
+    schedule = MonthSchedule.objects.filter(user=user_id, year=year, month=month).first()
+
+    if not schedule:
+        return Response({'error': 'Расписание не найдено'}, status=404)
+
+    result = generate_day_types(schedule)
+
+    days = [
+        {
+            'date': d.isoformat(),
+            'day': d.day,
+            'type': t,
+            'weekday': Weekday.get_day_by_number(d.isoweekday(), format_type='short_RU')
+        }
+        for d, t in result
+    ]
+
+    pattern = return_pattern(schedule)
+    groups = return_groups_by_pattern(schedule)
+
+    return Response({
+        'days': days,
+        'pattern': pattern,
+        'groups': groups
+    }, status=200)
+
+
+def get_users_with_schedule(request):
+    users = User.objects.filter(
+        Q(as_artist__isnull=False) | Q(as_manager__isnull=False)
+    ).distinct()
+
+    data = [
+        {
+            "id": user.id,
+            "name": user.username,
+            "roles": [
+                role for role, exists in [
+                    ("artist", hasattr(user, "as_artist")),
+                    ("manager", hasattr(user, "as_manager")),
+                    ("middleman", hasattr(user, "as_middleman")),
+                ] if exists
+            ]
+        }
+        for user in users
+    ]
+
+    return JsonResponse(data, safe=False)
+
+
+class TaskViewSet(viewsets.ModelViewSet):
+    queryset = Task.objects.all().order_by('date_day', 'start_datetime')
+    serializer_class = TaskSerializer

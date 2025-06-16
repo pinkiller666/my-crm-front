@@ -15,8 +15,12 @@
 
       <transition name="fade-slide">
         <div v-if="eventType" :key="eventType" class="form-section">
+          <label class="field-label">Название события:</label>
           <el-input v-model="form.name" placeholder="Название события" class="input-field" />
-          <el-input type="textarea" v-model="form.comment" placeholder="Комментарий (опционально)" rows="3" class="input-field" />
+
+          <label class="field-label">Комментарий (опционально):</label>
+          <el-input type="textarea" v-model="form.comment" placeholder="Комментарий" rows="3" class="input-field" />
+
           <el-switch v-model="form.isActive" active-text="Активно" inactive-text="Не активно" />
 
           <ExpandTransition :visible="eventType === 'once'">
@@ -112,7 +116,7 @@ function handleEventTypeChange(newType) {
   border-radius: var(--radius-card);
   /* box-shadow: 0 0 8px rgba(0, 0, 0, 0.2); /* мягкое внешнее свечение */
   box-shadow: 0 -4px 6px rgba(0,0,0,0.05);
-  margin: 2rem -1.5rem 0rem;
+  margin: 1rem -1.5rem 0rem;
   padding: 0 1rem; /* или любое своё */
 }
 
@@ -212,6 +216,14 @@ function handleEventTypeChange(newType) {
 .expand-leave-from {
   height: auto;
   opacity: 1;
+}
+
+.field-label {
+  display: block;
+  margin-bottom: 0.4rem;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  font-weight: 500;
 }
 
 </style>
