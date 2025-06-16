@@ -1,0 +1,73 @@
+@import './base.css';
+@import "palette.css";
+@import './palette.css';
+
+html, body {
+  overflow-x: hidden; /* Убираем горизонтальный скролл */
+  width: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+#app {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 2rem;
+  font-weight: normal;
+}
+
+ a {
+   color: var(--color-primary);
+ }
+
+ a:hover {
+   color: var(--color-primary-hover);
+ }
+
+ .green {
+   color: #68c7a0;
+}
+
+@media (hover: hover) {
+  a:hover {
+    background-color: hsla(160, 100%, 37%, 0.2);
+  }
+}
+
+.app {
+  width: 100%; /* Исправил с 100vw на 100%, чтобы не вызывать лишний скролл */
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.container {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  padding: 20px;
+  min-height: 90vh; /* Делаем контейнер хотя бы на высоту экрана */
+  min-width: 98vw;
+}
+
+.content-wrapper {
+  width: 100%;
+  min-height: 90%; /* Минимальная высота, чтобы не схлопывался */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid white;; /* Для наглядности можно поменять цвет*/
+}
+
+
+@media (min-width: 1024px) {
+  body {
+    display: flex;
+    place-items: center;
+  }
+
+  #app {
+    padding: 0 2rem;
+  }
+}
