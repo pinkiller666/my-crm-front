@@ -40,6 +40,17 @@ const demoDayPairs = [
       { id: 7, title: 'Оформить визу в спокойствие и не вернуться обратно', status: 'completed' },
       { id: 8, title: 'Перевести утюг в авиарежим и лечь спать', status: 'default' }
     ]
+  },
+  {
+    day: 17,
+    weekday: 'Пт',
+    date: '2025-06-17',
+    type: 'work',
+    tasks: [
+      { id: 9, title: 'Прыгнуть выше головы и не задеть потолок', status: 'default' },
+      { id: 10, title: 'Уточнить у холодильника, почему он молчит', status: 'overdue' },
+      { id: 11, title: 'Выдохнуть и забыть про это всё', status: 'default' }
+    ]
   }
 ]
 
@@ -51,38 +62,47 @@ function setDayPairRef(el: any, index: number) {
   }
 }
 
-function resolveOverlap(i: number) {
-  const current = dayPairRefs.value[i]?.taskList
-  const prev = dayPairRefs.value[i - 1]?.taskList?.root
+function resolveAllOverlaps(i: number): boolean {
+  const current = dayPairRefs.value[i]
+  const currentEl = current?.containerRef
+  if (!current || !currentEl) return false
 
-  if (current?.goLower && prev) {
-    const height = prev.getBoundingClientRect().height
-    console.log(`👇 Сдвигаем DayTaskList для элемента ${i} на высоту предыдущего (${height}px)`)
-    current.goLower(height)
-  }
-}
+  for (let j = i - 1; j >= 0 && j >= i - 3; j--) {
+    const prev = dayPairRefs.value[j]
+    const prevEl = prev?.containerRef
+    if (!prev || !prevEl) continue
 
-function checkIntersections() {
-  console.log('функция checkIntersections запустилась')
-  console.log('Длина массива дней:', dayPairRefs.value.length)
-  for (let i = 1; i < dayPairRefs.value.length; i++) {
-    console.log('запустился первый цикл')
-    const current = dayPairRefs.value[i]?.taskList?.root
-    const prev = dayPairRefs.value[i - 1]?.taskList?.root
-
-    if (!current || !prev) continue
-
-    const currentRect = current.getBoundingClientRect()
-    const prevRect = prev.getBoundingClientRect()
+    const currentRect = currentEl.getBoundingClientRect()
+    const prevRect = prevEl.getBoundingClientRect()
 
     const horizontalOverlap = !(currentRect.left > prevRect.right || currentRect.right < prevRect.left)
     const verticalOverlap = !(currentRect.top > prevRect.bottom || currentRect.bottom < prevRect.top)
 
     if (horizontalOverlap && verticalOverlap) {
-      console.warn(`\u{1F534} Пересечение между ${i - 1} и ${i}`)
-      resolveOverlap(i)
-    } else {
-      console.log(`\u2705 Нет пересечений: ${i - 1} vs ${i}`)
+      const shift = (prevRect.bottom - currentRect.top) + 8
+      console.log(`\u{1F504} Пересечение с ${j}, сдвигаем ${i} вниз на ${shift}`)
+      current.goLower(shift)
+      current.recalculateShiftX?.() // 🔧 Восстанавливаем сдвиг вправо после goLower
+      return true
+    }
+  }
+  return false
+}
+
+async function checkIntersectionsUntilStable() {
+  console.log('🔁 checkIntersectionsUntilStable')
+  let changed = true
+  let tries = 0
+  while (changed && tries < 10) {
+    changed = false
+    tries++
+
+    await nextTick()
+    await new Promise(r => requestAnimationFrame(r))
+
+    for (let i = 1; i < dayPairRefs.value.length; i++) {
+      const wasShifted = resolveAllOverlaps(i)
+      if (wasShifted) changed = true
     }
   }
 }
@@ -90,11 +110,10 @@ function checkIntersections() {
 onMounted(() => {
   nextTick(() => {
     requestAnimationFrame(() => {
-      checkIntersections()
+      checkIntersectionsUntilStable()
     })
   })
 })
-
 </script>
 
 <style>
