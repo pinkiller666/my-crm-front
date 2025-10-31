@@ -12,7 +12,7 @@ export const useAuthStore = defineStore("auth", {
   },
   actions: {
     async login(username, password) {
-      const res = await axios.post("/api/identity/token/", { username, password })
+      const res = await axios.post("identity/token/", { username, password })
       this.access = res.data.access
       this.refresh = res.data.refresh
       localStorage.setItem("refresh", this.refresh)
@@ -23,7 +23,7 @@ export const useAuthStore = defineStore("auth", {
     },
     async fetchUser() {
       try {
-        const res = await axios.get("/api/identity/profile/")
+        const res = await axios.get("identity/profile/")
         this.user = res.data
       } catch (e) {
         this.user = null
@@ -32,18 +32,36 @@ export const useAuthStore = defineStore("auth", {
     async refreshToken() {
       if (!this.refresh) return false
       try {
-        const res = await axios.post("/api/identity/token/refresh/", {
+        const res = await axios.post("identity/token/refresh/", {
           refresh: this.refresh,
         })
         this.access = res.data.access
-        this.refresh = res.data.refresh
-        localStorage.setItem("refresh", this.refresh)
+        if (res.data.refresh) {
+          this.refresh = res.data.refresh
+          localStorage.setItem("refresh", this.refresh)
+        }
         axios.defaults.headers.common["Authorization"] = `Bearer ${this.access}`
         return true
       } catch {
         this.logout()
         return false
       }
+    },
+    async register({ username, password, email, name }) {
+      const payload = {
+        username,
+        password,
+        email,
+        name,
+      }
+
+      const res = await axios.post("identity/register/", payload)
+
+      if (username && password) {
+        await this.login(username, password)
+      }
+
+      return res.data
     },
     logout() {
       this.access = null

@@ -188,9 +188,9 @@ const handleCompleteTask = async (task, newStatus) => {
     }
 
     if (task.is_recurring) {
-      await axios.patch(`/api/schedule/events/${task.event.id}/update-status/`, payload)
+      await axios.patch(`schedule/events/${task.event.id}/update-status/`, payload)
     } else {
-      await axios.patch(`/api/schedule/events/${task.event.id}/`, {
+      await axios.patch(`schedule/events/${task.event.id}/`, {
         is_completed: newStatus,
         status: payload.status,
       })
@@ -207,12 +207,12 @@ const handleRemoveTask = async (task) => {
   try {
     if (task.is_recurring) {
       // удаляем конкретное вхождение
-      await axios.delete(`/api/schedule/events/${task.event.id}/delete/`, {
+      await axios.delete(`schedule/events/${task.event.id}/delete/`, {
         params: { instance_datetime: task.datetime }
       })
     } else {
       // удаляем целое событие
-      await axios.delete(`/api/schedule/events/${task.event.id}/delete/`)
+      await axios.delete(`schedule/events/${task.event.id}/delete/`)
     }
 
     await loadAllEvents(selectedYear.value, selectedMonth.value)
@@ -315,7 +315,7 @@ const groupedFilteredDays = computed(() => {
 // --- LOAD AVAILABLE FILTERS ---
 onMounted(async () => {
   try {
-    const res = await axios.get('/api/schedule/month-schedules/');
+    const res = await axios.get('schedule/month-schedules/');
     const data = res.data;
 
     const years = new Set(), months = new Set(), usersMap = new Map()
@@ -355,7 +355,7 @@ onMounted(async () => {
 async function loadAllEvents(year, month) {
   loading.value = true
   try {
-    const res = await axios.get(`/api/schedule/all_events/?year=${year}&month=${month}`)
+    const res = await axios.get(`schedule/all_events/?year=${year}&month=${month}`)
     const data = res.data
 
     // ⛔️ 1) фильтруем отменённые (cancelled)
@@ -394,7 +394,7 @@ watch([selectedUser, selectedMonth, selectedYear], async ([user, month, year]) =
   loading.value = true
   try {
     const res = await axios.get(
-      `/api/schedule/preview?year=${year}&month=${month}&user=${user}`
+      `schedule/preview?year=${year}&month=${month}&user=${user}`
     )
     const data = res.data;
     days.value = data.days

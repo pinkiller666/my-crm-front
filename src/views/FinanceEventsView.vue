@@ -44,6 +44,10 @@
       </el-table>
     </div>
 
+    <div v-else>
+      <el-empty description="Нет событий за выбранный период" />
+    </div>
+
     <!-- Модальное окно корректировки -->
     <el-dialog title="Добавить корректировочное событие" v-model="correctionModalVisible">
       <el-form :model="correctionForm" label-width="120px">
@@ -69,58 +73,81 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed, watch } from "vue";
-import axios from "@/axios";
-import AmountNumber from "@/components/AmountNumber.vue";
-import FinanceStats from '@/components/FinanceStats.vue';
+import { ref, onMounted, computed, watch } from "vue"
+import { ElMessage } from "element-plus"
+import axios from "@/axios"
+import AmountNumber from "@/components/AmountNumber.vue"
+import FinanceStats from "@/components/FinanceStats.vue"
 
-const accounts = ref([]);
-const events = ref([]);
+const accounts = ref([])
+const events = ref([])
 
-const selectedMonthYear = ref(`${new Date().getFullYear()}-${(new Date().getMonth()+1).toString().padStart(2,'0')}`);
-const selectedAccount = ref(null);
+const selectedMonthYear = ref(`${new Date().getFullYear()}-${(new Date().getMonth() + 1).toString().padStart(2, '0')}`)
+const selectedAccount = ref(null)
 
 async function fetchAccounts() {
-  const res = await axios.get("/api/accounting/accounts/");
-  accounts.value = res.data;
+  try {
+    const res = await axios.get("accounting/accounts/")
+    accounts.value = res.data
+    if (!selectedAccount.value && accounts.value.length) {
+      selectedAccount.value = accounts.value[0].id
+    }
+  } catch (err) {
+    console.error("Не удалось загрузить список аккаунтов", err)
+    ElMessage.error("Не удалось загрузить аккаунты")
+  }
 }
 
-watch(selectedMonthYear, async () => {
-  const [year, month] = selectedMonthYear.value.split('-').map(Number);
-  const res = await axios.get("/api/schedule/all_events/", { params: { year, month } });
-  events.value = res.data;
-}, { immediate: true });
+async function fetchEvents() {
+  const [year, month] = selectedMonthYear.value.split('-').map(Number)
+  try {
+    const res = await axios.get("schedule/all_events/", { params: { year, month } })
+    events.value = res.data
+  } catch (err) {
+    console.error("Не удалось загрузить события", err)
+    ElMessage.error("Не удалось загрузить события")
+    events.value = []
+  }
+}
+
+watch(selectedMonthYear, () => {
+  fetchEvents()
+}, { immediate: true })
 
 const filteredEvents = computed(() => {
-  if (!selectedAccount.value) return [];
-  return events.value.filter(e => e.event.account === selectedAccount.value);
-});
+  if (!selectedAccount.value) return []
+  return events.value.filter((e) => e.event.account === selectedAccount.value)
+})
 
-onMounted(fetchAccounts);
+onMounted(async () => {
+  await fetchAccounts()
+})
 
 // --- Модальное окно корректировки ---
-const correctionModalVisible = ref(false);
+const correctionModalVisible = ref(false)
 const correctionForm = ref({
   name: "",
   amount: 0,
-  start_datetime: ""
-});
+  start_datetime: "",
+})
 
 function openCorrectionModal() {
   if (!selectedAccount.value) {
-    return alert("Сначала выберите аккаунт 😅");
+    ElMessage.warning("Сначала выберите аккаунт")
+    return
   }
   correctionForm.value = {
     name: "",
     amount: 0,
-    start_datetime: ""
-  };
-  correctionModalVisible.value = true;
+    start_datetime: "",
+  }
+  correctionModalVisible.value = true
 }
 
 async function submitCorrection() {
   if (!correctionForm.value.name || !correctionForm.value.amount || !correctionForm.value.start_datetime) {
-    return alert("Заполните все поля!");
+    ElMessage.warning("Заполните все поля")
+    return
   }
 
   const payload = {
@@ -129,19 +156,17 @@ async function submitCorrection() {
     start_datetime: correctionForm.value.start_datetime,
     account: selectedAccount.value,
     is_balance_correction: true,
-    status: "complete"
-  };
+    status: "complete",
+  }
 
   try {
-    await axios.post("/api/schedule/events/", payload);
-    correctionModalVisible.value = false;
-    // обновляем список событий
-    const [year, month] = selectedMonthYear.value.split('-').map(Number);
-    const res = await axios.get("/api/schedule/all_events/", { params: { year, month } });
-    events.value = res.data;
+    await axios.post("schedule/events/", payload)
+    correctionModalVisible.value = false
+    ElMessage.success("Корректировка добавлена")
+    await fetchEvents()
   } catch (err) {
-    console.error(err);
-    alert("Ошибка при добавлении корректировки");
+    console.error(err)
+    ElMessage.error("Ошибка при добавлении корректировки")
   }
 }
 </script>

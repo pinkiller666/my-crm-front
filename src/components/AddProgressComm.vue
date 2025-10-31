@@ -47,6 +47,7 @@
 <script setup>
 import { ref } from 'vue'
 import { ElMessage } from 'element-plus'
+import axios from '@/axios'
 
 const form = ref({
   artist: null,
@@ -93,17 +94,7 @@ async function submitForm() {
     if (!valid) return ElMessage.error('Форма невалидна')
 
     try {
-      const response = await fetch('/api/progress/', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(form.value),
-      })
-
-      if (!response.ok) throw new Error('Сервер вернул ошибку')
-
-      const data = await response.json()
+      const { data } = await axios.post('progress/', form.value)
 
       ElMessage.success(`Комиссия успешно создана!`)
       form.value = { artist: null, amount: null, comment: '' }

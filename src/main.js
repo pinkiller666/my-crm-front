@@ -19,17 +19,21 @@ const app = createApp(App)
 
 app.use(createPinia())
 
-const auth = useAuthStore()
-await auth.init()
+const bootstrap = async () => {
+  const auth = useAuthStore()
+  await auth.init()
 
-app.use(router)
-app.use(VueDragScroller)
-app.use(ElementPlus)
+  app.use(router)
+  app.use(VueDragScroller)
+  app.use(ElementPlus)
 
-for (const [key, component] of Object.entries(ElementPlusIconsVue)) {
+  for (const [key, component] of Object.entries(ElementPlusIconsVue)) {
     app.component(key, component)
+  }
+
+  app.mount('#app')
 }
 
-
-
-app.mount('#app')
+bootstrap().catch((err) => {
+  console.error('Не удалось инициализировать приложение', err)
+})

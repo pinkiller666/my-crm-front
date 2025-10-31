@@ -44,6 +44,11 @@
             Login
           </el-button>
         </el-form-item>
+        <el-form-item>
+          <el-button type="text" class="w-full" @click="goToRegister">
+            Нет аккаунта? Зарегистрируйтесь
+          </el-button>
+        </el-form-item>
       </el-form>
     </el-card>
   </div>
@@ -51,10 +56,12 @@
 
 <script setup>
 import { ref, reactive } from "vue"
+import { useRouter } from 'vue-router'
 import { ElMessage } from "element-plus"
 import { useAuthStore } from "@/stores/auth"
 
 const auth = useAuthStore()
+const router = useRouter()
 
 const formRef = ref(null)
 const form = reactive({
@@ -80,8 +87,7 @@ const onSubmit = async () => {
     await auth.login(form.username, form.password)
 
     ElMessage.success("Login successful 🎉")
-    // редиректим на главную или дашборд
-    window.location.href = "/"
+    router.push({ name: 'home' })
   } catch (err) {
     if (err.response && err.response.status === 401) {
       error.value = "Invalid username or password"
@@ -93,5 +99,9 @@ const onSubmit = async () => {
   } finally {
     loading.value = false
   }
+}
+
+const goToRegister = () => {
+  router.push({ name: 'register' })
 }
 </script>

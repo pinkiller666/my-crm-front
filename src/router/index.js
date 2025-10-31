@@ -8,13 +8,13 @@ const router = createRouter({
       path: '/',
       name: 'home',
       component: () => import('../views/HomeView.vue'),
-    meta: { requiresAuth: true },
+      meta: { requiresAuth: true },
     },
     {
       path: '/finance',
       name: 'finance-events',
       component: () => import('../views/FinanceEventsView.vue'),
-    meta: { requiresAuth: true },
+      meta: { requiresAuth: true },
     },
     {
       path: '/login',
@@ -22,10 +22,15 @@ const router = createRouter({
       component: () => import('../views/LoginView.vue'),
     },
     {
+      path: '/register',
+      name: 'register',
+      component: () => import('../views/RegisterView.vue'),
+    },
+    {
       path: '/daily',
       name: 'daily-tasks',
       component: () => import('../views/DailyTasksView.vue'),
-    meta: { requiresAuth: true },
+      meta: { requiresAuth: true },
     },
   ],
 })
@@ -33,10 +38,10 @@ const router = createRouter({
 router.beforeEach((to, from, next) => {
   const auth = useAuthStore()
 
-  console.log(auth.isAuthenticated)
-
   if (to.meta.requiresAuth && !auth.isAuthenticated) {
     next({ name: "login" })
+  } else if ((to.name === 'login' || to.name === 'register') && auth.isAuthenticated) {
+    next({ name: 'home' })
   } else {
     next()
   }

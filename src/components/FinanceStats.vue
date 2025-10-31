@@ -92,7 +92,7 @@ async function fetchBudget() {
   loading.value = true;
   const [year, month] = props.selectedMonthYear.split('-').map(Number);
   try {
-    const res = await axios.get(`/api/accounting/budget/`, {
+    const res = await axios.get(`accounting/budget/`, {
       params: { year, month }
     });
     budget.value = res.data;

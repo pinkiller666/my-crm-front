@@ -132,7 +132,7 @@ async function submitTask() {
       start_datetime: isoDatetime
     }
 
-    const response = await axios.post('/api/schedule/events/', payload)
+    const response = await axios.post('schedule/events/', payload)
 
     emit('addTask', response.data)
 
