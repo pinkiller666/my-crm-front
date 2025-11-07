@@ -13,6 +13,7 @@
           v-model="selectedUser"
           placeholder="Пользователь"
           size="small"
+          :disabled="userSelectorLocked"
       >
         <el-option
             v-for="user in userOptions"
@@ -128,6 +129,7 @@ const showScope = ref('month')     // month | week
 const doNotShowPast = ref(false)
 
 const userOptions = ref([])
+const userSelectorLocked = ref(true)
 const availableYears = ref([])
 const availableMonths = ref([])
 
@@ -336,6 +338,19 @@ const isManager = computed(() => {
 const showUserSelector = computed(() => isManager.value)
 
 const usersLoadedFromApi = ref(false)
+
+function logCurrentUserAccess() {
+  console.log('Текущая информация о пользователе:', currentUser.value)
+  if (isManager.value) {
+    console.log('Текущий пользователь менеджер')
+  } else {
+    console.log('Текущий пользователь не менеджер')
+  }
+}
+
+watch([currentUser, isManager], () => {
+  logCurrentUserAccess()
+}, { immediate: true })
 
 function mergeUserOptions(candidates) {
   if (!Array.isArray(candidates)) return

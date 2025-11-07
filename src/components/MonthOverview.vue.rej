@@ -1,0 +1,117 @@
+diff a/src/components/MonthOverview.vue b/src/components/MonthOverview.vue	(rejected hunks)
+@@ -315,93 +317,110 @@ const groupedFilteredDays = computed(() => {
+ 
+ // --- USER ROLES / SELECT OPTIONS ---
+ const isManager = computed(() => {
+   const user = currentUser.value
+   if (!user) return false
+ 
+   if (typeof user.is_manager === 'boolean') return user.is_manager
+ 
+   const roleCandidates = []
+   if (typeof user.role === 'string') roleCandidates.push(user.role)
+   if (Array.isArray(user.roles)) roleCandidates.push(...user.roles)
+   if (Array.isArray(user.role)) roleCandidates.push(...user.role)
+   if (Array.isArray(user.groups)) {
+     for (const group of user.groups) {
+       if (typeof group === 'string') roleCandidates.push(group)
+       else if (group && typeof group.name === 'string') roleCandidates.push(group.name)
+     }
+   }
+   return roleCandidates.some(r => typeof r === 'string' && r.toLowerCase().includes('manager'))
+ })
+ 
+ const showUserSelector = computed(() => isManager.value)
+ 
+ const usersLoadedFromApi = ref(false)
+ 
++function logCurrentUserAccess() {
++  console.log('Текущая информация о пользователе:', currentUser.value)
++  if (isManager.value) {
++    console.log('Текущий пользователь менеджер')
++  } else {
++    console.log('Текущий пользователь не менеджер')
++  }
++}
++
++watch([currentUser, isManager], () => {
++  logCurrentUserAccess()
++}, { immediate: true })
++
+ function mergeUserOptions(candidates) {
+   if (!Array.isArray(candidates)) return
+   const map = new Map(userOptions.value.map(u => [u.id, u]))
+   for (const c of candidates) {
+     if (!c || typeof c !== 'object') continue
+     const id = c.id
+     if (id === undefined || id === null) continue
+     map.set(id, { ...(map.get(id) || {}), ...c })
+   }
+   userOptions.value = Array.from(map.values())
+ }
+ 
+-async function loadUserOptions() {
++async function fetchUsersForManager() {
+   if (usersLoadedFromApi.value) return
+   try {
+-    const res = await axios.get('identity/users/')
++    const res = await axios.get('schedule/users/')
+     const payload = Array.isArray(res.data?.results) ? res.data.results : res.data
+-    if (Array.isArray(payload)) mergeUserOptions(payload)
++    if (Array.isArray(payload)) {
++      mergeUserOptions(payload)
++    }
+   } catch (err) {
+-    console.warn('Не удалось загрузить полный список пользователей, используем fallback из расписаний', err)
++    console.error('Не удалось получить список пользователей для менеджера', err)
+   } finally {
+     usersLoadedFromApi.value = true
+   }
+ }
+ 
+ watch(currentUser, (user) => {
+   if (!user || !user.id) return
+   if (isManager.value) {
+     mergeUserOptions([user])
+     if (!selectedUser.value) selectedUser.value = user.id
+   } else {
+     userOptions.value = [user]
+     selectedUser.value = user.id
+   }
+ }, { immediate: true })
+ 
+ watch(isManager, async (canManage) => {
+   if (canManage) {
+-    await loadUserOptions()
++    userSelectorLocked.value = false
++    await fetchUsersForManager()
+     if (currentUser.value?.id && !selectedUser.value) {
+       selectedUser.value = currentUser.value.id
+     }
+   } else if (currentUser.value) {
++    userSelectorLocked.value = true
+     userOptions.value = [currentUser.value]
+     selectedUser.value = currentUser.value.id
+   }
+ }, { immediate: true })
+ 
+ watch([isManager, currentUser, selectedUser], ([manager, user, selected]) => {
+   if (!manager && user?.id && selected !== user.id) {
+     selectedUser.value = user.id
+   }
+ })
+ 
+ // --- DATA LOADING ---
+ onMounted(async () => {
+   try {
+     const res = await axios.get('schedule/month-schedules/')
+     const data = res.data
+ 
+     const years = new Set()
+     const months = new Set()
+     const usersMap = new Map()
+ 
+     for (const item of data) {
+       years.add(item.year)
+       months.add(item.month)
+       if (item.user && !usersMap.has(item.user.id)) usersMap.set(item.user.id, item.user)
