@@ -3,18 +3,23 @@
 <div class="calendar-wrapper">
 
   <div class="calendar-controls">
-<el-date-picker
-  v-model="selectedDate"
-  type="month"
-  placeholder="Выберите месяц"
-  :disabled-date="disabledDate"
-  size="small"
-/>
-    <el-select v-model="selectedUser" placeholder="Пользователь" size="small">
+    <el-date-picker
+      v-model="selectedDate"
+      type="month"
+      placeholder="Выберите месяц"
+      :disabled-date="disabledDate"
+      size="small"
+    />
+    <el-select
+      v-if="showUserSelector"
+      v-model="selectedUser"
+      placeholder="Пользователь"
+      size="small"
+    >
       <el-option
         v-for="user in userOptions"
         :key="user.id"
-        :label="user.username || `ID ${user.id}`"
+        :label="user.name || user.username || `ID ${user.id}`"
         :value="user.id"
       />
     </el-select>
@@ -105,10 +110,17 @@ import DayPair from './DayPair.vue'
 import axios from "@/axios"
 import EventEditor from './EventEditor.vue'
 import { parseISO, getISOWeek } from 'date-fns'
+import { useAuthStore } from '@/stores/auth'
+import { storeToRefs } from 'pinia'
 
 // --- STATE ---
+const authStore = useAuthStore()
+const { user: currentUser } = storeToRefs(authStore)
+
+const today = new Date()
+
 const selectedUser = ref(null)
-const selectedDate = ref(null) // This will hold the selected month and year
+const selectedDate = ref(new Date(today.getFullYear(), today.getMonth())) // This will hold the selected month and year
 const showDays = ref('all')        // all, work, off
 const showScope = ref('month')     // month, week
 const doNotShowPast = ref(false)
@@ -120,8 +132,8 @@ const groups = ref([])
 const tasks = ref({})
 const pattern = ref({})
 const loading = ref(false)
-const selectedYear = ref(null)
-const selectedMonth = ref(null)
+const selectedYear = ref(today.getFullYear())
+const selectedMonth = ref(today.getMonth() + 1)
 const scrollContainer = ref(null)
 const isModalVisible = ref(false)
 const currentTask = ref(null)
@@ -242,11 +254,7 @@ watch([selectedYear, selectedMonth], ([year, month]) => {
     selectedDate.value = new Date(year, month - 1)
   }
 })
-const disabledDate = (date) => {
-  const y = date.getFullYear()
-  const m = date.getMonth() + 1
-  return !availableYears.value.includes(y) || !availableMonths.value.includes(m)
-}
+const disabledDate = () => false
 const monthOptions = [
   'Январь','Февраль','Март','Апрель','Май','Июнь',
   'Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'
@@ -327,29 +335,126 @@ onMounted(async () => {
 
     availableYears.value = [...years].sort()
     availableMonths.value = [...months].sort((a,b)=>a-b)
-    userOptions.value = Array.from(usersMap.values())
 
-    const today = new Date()
-    const currentYear = today.getFullYear()
-    const currentMonth = today.getMonth() + 1 // JS: 0–11 → 1–12
-
-// если текущий год и месяц есть в доступных — используем их
-    if (availableYears.value.includes(currentYear) && availableMonths.value.includes(currentMonth)) {
-      selectedYear.value = currentYear
-      selectedMonth.value = currentMonth
-    } else {
-      // иначе fallback — берём первые доступные
-      selectedYear.value = availableYears.value[0]
-      selectedMonth.value = availableMonths.value[0]
+    const fallbackUsers = Array.from(usersMap.values())
+    if (fallbackUsers.length) {
+      mergeUserOptions(fallbackUsers)
     }
-
-    selectedUser.value = userOptions.value[0]?.id || null
 
   } catch (err) {
     ElMessage.error('Не удалось загрузить доступные данные 🥲')
     console.error(err)
   }
 })
+
+const isManager = computed(() => {
+  const user = currentUser.value
+  if (!user) return false
+
+  if (typeof user.is_manager === 'boolean') {
+    return user.is_manager
+  }
+
+  const roleCandidates = []
+
+  if (typeof user.role === 'string') {
+    roleCandidates.push(user.role)
+  }
+  if (Array.isArray(user.roles)) {
+    roleCandidates.push(...user.roles)
+  }
+  if (Array.isArray(user.role)) {
+    roleCandidates.push(...user.role)
+  }
+  if (Array.isArray(user.groups)) {
+    for (const group of user.groups) {
+      if (typeof group === 'string') {
+        roleCandidates.push(group)
+      } else if (group && typeof group.name === 'string') {
+        roleCandidates.push(group.name)
+      }
+    }
+  }
+
+  return roleCandidates.some((role) => {
+    if (typeof role !== 'string') return false
+    const normalized = role.toLowerCase()
+    return normalized.includes('manager')
+  })
+})
+
+const showUserSelector = computed(() => isManager.value)
+
+watch(currentUser, (user) => {
+  if (!user || !user.id) return
+
+  if (isManager.value) {
+    mergeUserOptions([user])
+    if (!selectedUser.value) {
+      selectedUser.value = user.id
+    }
+  } else {
+    userOptions.value = [user]
+    selectedUser.value = user.id
+  }
+}, { immediate: true })
+
+const usersLoadedFromApi = ref(false)
+
+watch(isManager, async (canManage) => {
+  if (canManage) {
+    await loadUserOptions()
+    if (currentUser.value?.id && !selectedUser.value) {
+      selectedUser.value = currentUser.value.id
+    }
+  } else if (currentUser.value) {
+    userOptions.value = [currentUser.value]
+    selectedUser.value = currentUser.value.id
+  }
+}, { immediate: true })
+
+watch([isManager, currentUser, selectedUser], ([manager, user, selected]) => {
+  if (!manager && user?.id && selected !== user.id) {
+    selectedUser.value = user.id
+  }
+})
+
+async function loadUserOptions() {
+  if (usersLoadedFromApi.value) {
+    return
+  }
+
+  try {
+    const res = await axios.get('identity/users/')
+    const payload = Array.isArray(res.data?.results) ? res.data.results : res.data
+    if (Array.isArray(payload)) {
+      mergeUserOptions(payload)
+    }
+  } catch (err) {
+    console.warn('Не удалось загрузить полный список пользователей, используем fallback из расписаний', err)
+  } finally {
+    usersLoadedFromApi.value = true
+  }
+}
+
+function mergeUserOptions(candidates) {
+  if (!Array.isArray(candidates)) return
+
+  const map = new Map(userOptions.value.map((user) => [user.id, user]))
+  for (const candidate of candidates) {
+    if (!candidate || typeof candidate !== 'object') continue
+    const id = candidate.id
+    if (id === undefined || id === null) continue
+
+    if (map.has(id)) {
+      map.set(id, { ...map.get(id), ...candidate })
+    } else {
+      map.set(id, candidate)
+    }
+  }
+
+  userOptions.value = Array.from(map.values())
+}
 
 
 async function loadAllEvents(year, month) {
