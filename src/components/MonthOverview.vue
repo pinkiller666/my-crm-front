@@ -399,7 +399,8 @@ function mergeUserOptions(candidates) {
 async function loadUserOptions() {
   if (usersLoadedFromApi.value) return
   try {
-    const res = await axios.get('identity/users/')
+    console.log("сейчас будем брать юзеров")
+    const res = await axios.get('identity/users_unsafe/')
     const payload = Array.isArray(res.data?.results) ? res.data.results : res.data
     if (Array.isArray(payload)) mergeUserOptions(payload)
   } catch (err) {
