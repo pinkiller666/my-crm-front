@@ -306,11 +306,34 @@ const totalWorkHours = computed(() =>
     workDaysCount.value * (pattern.value?.working_day_duration || 8)
 )
 
+// 🧩 Всегда используем группы из API и фильтруем их по текущим условиям
 const groupedFilteredDays = computed(() => {
+  // Разрешённые даты после всех фильтров
+  const allowedDates = new Set()
+  for (let i = 0; i < filteredDays.value.length; i++) {
+    const d = filteredDays.value[i]
+    if (d && typeof d.date === 'string') {
+      allowedDates.add(d.date)
+    }
+  }
+
   const result = []
-  const chunkSize = showScope.value === 'week' ? filteredDays.value.length : 7
-  for (let i = 0; i < filteredDays.value.length; i += chunkSize) {
-    result.push(filteredDays.value.slice(i, i + chunkSize))
+  if (Array.isArray(groups.value)) {
+    for (let gi = 0; gi < groups.value.length; gi++) {
+      const group = groups.value[gi]
+      if (Array.isArray(group)) {
+        const kept = []
+        for (let di = 0; di < group.length; di++) {
+          const day = group[di]
+          if (day && typeof day.date === 'string' && allowedDates.has(day.date)) {
+            kept.push(day)
+          }
+        }
+        if (kept.length > 0) {
+          result.push(kept)
+        }
+      }
+    }
   }
   return result
 })
@@ -350,6 +373,15 @@ function logCurrentUserAccess() {
 
 watch([currentUser, isManager], () => {
   logCurrentUserAccess()
+}, { immediate: true })
+
+// 🔓 Разблокировка селекта для менеджера
+watch(isManager, (canManage) => {
+  if (canManage === true) {
+    userSelectorLocked.value = false
+  } else {
+    userSelectorLocked.value = true
+  }
 }, { immediate: true })
 
 function mergeUserOptions(candidates) {
