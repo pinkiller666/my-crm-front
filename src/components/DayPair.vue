@@ -200,7 +200,7 @@ onBeforeUnmount(() => {
 
   /* базовые цвета (можно позже заменить на CSS-переменные темы) */
   --num-bg: transparent;
-  --num-fg: #23262f;
+  --num-fg: #ffb347;
 
   &:hover { background: #f5f7fa; }
   &.today { border: 2px solid #409eff; border-radius: 10px; }

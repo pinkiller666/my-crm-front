@@ -18,7 +18,7 @@
         <el-option
             v-for="user in userOptions"
             :key="user.id"
-            :label="user.name || user.username || `ID ${user.id}`"
+            :label="user.name || user.username || ('ID ' + user.id)"
             :value="user.id"
         />
       </el-select>
@@ -87,26 +87,29 @@
         </div>
       </div>
     </div>
-  </div>
 
-  <el-dialog
-      v-model="isModalVisible"
-      title="Редактировать задачу"
-      width="600px"
-      :close-on-click-modal="true"
-      @close="closeModal"
-      destroy-on-close
-      close-on-press-escape
-  >
-    <EventEditor
-        v-if="currentTask"
-        :initialEvent="currentTask"
-        @complete="closeModal"
-    />
-  </el-dialog>
+    <el-dialog
+        v-model="isModalVisible"
+        title="Редактировать задачу"
+        width="600px"
+        :close-on-click-modal="true"
+        @close="closeModal"
+        destroy-on-close
+        close-on-press-escape
+    >
+      <EventEditor
+          v-if="currentTask"
+          :initialEvent="currentTask"
+          @complete="closeModal"
+      />
+    </el-dialog>
+  </div>
 </template>
 
 <script setup>
+// ===========================
+// 🎯 SCRIPT (без optional chaining)
+// ===========================
 import { ref, onMounted, computed, watch, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
 import DayPair from './DayPair.vue'
@@ -123,7 +126,7 @@ const { user: currentUser } = storeToRefs(authStore)
 const today = new Date()
 
 const selectedUser = ref(null)
-const selectedDate = ref(new Date(today.getFullYear(), today.getMonth())) // month picker value
+const selectedDate = ref(new Date(today.getFullYear(), today.getMonth()))
 const showDays = ref('all')        // all | work | off
 const showScope = ref('month')     // month | week
 const doNotShowPast = ref(false)
@@ -152,8 +155,87 @@ const monthOptions = [
   'Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'
 ]
 
+// ====== 🔧 Временный оверрайд расписания (включить/выключить) ======
+const USE_TEMP_OVERRIDE = false
+
+function buildTempSchedule(year, month) {
+  // Сколько дней в месяце
+  const daysInMonth = new Date(year, month, 0).getDate()
+
+  const ruWeekdays = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб']
+  const todayDate = new Date()
+  const todayY = todayDate.getFullYear()
+  const todayM = todayDate.getMonth() + 1
+  const todayD = todayDate.getDate()
+
+  // 1–5: off; далее цикл 2 work / 2 off
+  const tempDays = []
+  for (let d = 1; d <= daysInMonth; d++) {
+    const jsDate = new Date(year, month - 1, d)
+    const wd = ruWeekdays[jsDate.getDay()]
+
+    let type
+    if (d <= 5) {
+      type = 'off'
+    } else {
+      const idx = (d - 6) % 4 // 0,1 -> work; 2,3 -> off
+      if (idx === 0 || idx === 1) type = 'work'
+      else type = 'off'
+    }
+
+    const dateStr = String(year) + '-' + String(month).padStart(2, '0') + '-' + String(d).padStart(2, '0')
+
+    tempDays.push({
+      date: dateStr,
+      day: d,
+      weekday: wd,
+      is_today: (year === todayY && month === todayM && d === todayD),
+      group_id: null,
+      overrides: [],
+      notes: '',
+      type: type,
+      forced: false
+    })
+  }
+
+  // Последний день — принудительно рабочий, если он off
+  if (tempDays.length > 0 && tempDays[tempDays.length - 1].type === 'off') {
+    tempDays[tempDays.length - 1].type = 'work'
+    tempDays[tempDays.length - 1].forced = true
+  }
+
+  // Группы: 5, 4, 4, 4, ...
+  const tempGroups = []
+  let i = 0
+  let first = true
+  while (i < tempDays.length) {
+    const chunkSize = first ? 5 : 4
+    const chunk = tempDays.slice(i, i + chunkSize)
+    if (chunk.length === 0) break
+    tempGroups.push(chunk)
+    i += chunkSize
+    first = false
+  }
+
+  // Паттерн (число часов в день — number)
+  const tempPattern = {
+    id: -1,
+    name: 'TEMP-OVERRIDE',
+    description: '5 off → 2/2, last forced work',
+    mode: 'custom',
+    weekday_map: null,
+    days_off_at_start: 5,
+    pattern_after_start: [2, 2],
+    last_day_always_working: true,
+    working_day_duration: 5,
+    cycle_length: 4
+  }
+
+  return { days: tempDays, groups: tempGroups, pattern: tempPattern }
+}
+
 // --- HELPERS ---
-const disabledDate = () => false
+const disabledDate = function () { return false }
 
 function onWheel(e) {
   const container = scrollContainer.value
@@ -166,28 +248,29 @@ function onWheel(e) {
 }
 
 function toLocalDateKey(dateObj) {
+  if (!(dateObj instanceof Date) || isNaN(dateObj.getTime())) {
+    return 'invalid-date'
+  }
   const y = dateObj.getFullYear()
   const m = String(dateObj.getMonth() + 1).padStart(2, '0')
   const d = String(dateObj.getDate()).padStart(2, '0')
-  return `${y}-${m}-${d}`
+  return y + '-' + m + '-' + d
 }
 
 function isCancelledTask(item) {
   if (!item) return false
 
-  // overlay.status
   if (item.overlay && typeof item.overlay.status === 'string') {
     const s = item.overlay.status.toLowerCase()
     if (s === 'cancelled') return true
   }
 
-  // возможные поля статуса
-  const candidates = [
-    item.status,
-    item.instance_status,
-    item.state,
-    item?.event?.status
-  ]
+  const candidates = []
+  if (typeof item.status === 'string') candidates.push(item.status)
+  if (typeof item.instance_status === 'string') candidates.push(item.instance_status)
+  if (typeof item.state === 'string') candidates.push(item.state)
+  if (item.event && typeof item.event.status === 'string') candidates.push(item.event.status)
+
   for (let i = 0; i < candidates.length; i++) {
     const v = candidates[i]
     if (typeof v === 'string' && v.toLowerCase() === 'cancelled') return true
@@ -195,6 +278,24 @@ function isCancelledTask(item) {
 
   if (item.is_cancelled === true) return true
   return false
+}
+
+// Нормализатор событий: гарантируем валидную ISO-дату в .datetime
+function normalizeEvent(e) {
+  if (!e || typeof e !== 'object') return null
+
+  let iso = e.datetime
+  if ((!iso || typeof iso !== 'string' || iso.length === 0) && e.event && typeof e.event.starts_at === 'string') {
+    iso = e.event.starts_at
+  }
+  if (!iso || typeof iso !== 'string') return null
+
+  const d = new Date(iso)
+  if (isNaN(d.getTime())) {
+    console.warn('[all_events] invalid date', { id: e.id, source_event_id: e.source_event_id, iso: iso })
+    return null
+  }
+  return Object.assign({}, e, { datetime: d.toISOString() })
 }
 
 // --- TASK MODAL ---
@@ -209,7 +310,7 @@ async function closeModal() {
 }
 
 // --- TASK ACTIONS ---
-const handleCompleteTask = async (task, newStatus) => {
+const handleCompleteTask = async function (task, newStatus) {
   try {
     const payload = {
       status: newStatus ? 'complete' : 'incomplete',
@@ -217,9 +318,9 @@ const handleCompleteTask = async (task, newStatus) => {
       instance_datetime: task.datetime
     }
     if (task.is_recurring) {
-      await axios.patch(`schedule/events/${task.event.id}/update-status/`, payload)
+      await axios.patch('schedule/events/' + task.event.id + '/update-status/', payload)
     } else {
-      await axios.patch(`schedule/events/${task.event.id}/`, {
+      await axios.patch('schedule/events/' + task.event.id + '/', {
         is_completed: newStatus,
         status: payload.status
       })
@@ -230,14 +331,14 @@ const handleCompleteTask = async (task, newStatus) => {
   }
 }
 
-const handleRemoveTask = async (task) => {
+const handleRemoveTask = async function (task) {
   try {
     if (task.is_recurring) {
-      await axios.delete(`schedule/events/${task.event.id}/delete/`, {
+      await axios.delete('schedule/events/' + task.event.id + '/delete/', {
         params: { instance_datetime: task.datetime }
       })
     } else {
-      await axios.delete(`schedule/events/${task.event.id}/delete/`)
+      await axios.delete('schedule/events/' + task.event.id + '/delete/')
     }
     await loadAllEvents(selectedYear.value, selectedMonth.value)
   } catch (err) {
@@ -245,7 +346,7 @@ const handleRemoveTask = async (task) => {
   }
 }
 
-const handleAddTask = async () => {
+const handleAddTask = async function () {
   try {
     await loadAllEvents(selectedYear.value, selectedMonth.value)
   } catch (err) {
@@ -254,20 +355,20 @@ const handleAddTask = async () => {
 }
 
 // --- DATE/USER SYNC ---
-watch(selectedDate, (date) => {
+watch(selectedDate, function (date) {
   if (date instanceof Date) {
     selectedYear.value = date.getFullYear()
     selectedMonth.value = date.getMonth() + 1
   }
 })
-watch([selectedYear, selectedMonth], ([year, month]) => {
+watch([selectedYear, selectedMonth], function ([year, month]) {
   if (year && month) {
     selectedDate.value = new Date(year, month - 1)
   }
 })
 
 // --- FILTERED/COUNTS/GROUPS ---
-const filteredDays = computed(() => {
+const filteredDays = computed(function () {
   let list = days.value.slice()
 
   if (doNotShowPast.value) {
@@ -277,7 +378,7 @@ const filteredDays = computed(() => {
         todayLocal.getMonth(),
         todayLocal.getDate()
     )
-    list = list.filter(d => {
+    list = list.filter(function (d) {
       const dd = parseISO(d.date)
       const ddOnly = new Date(dd.getFullYear(), dd.getMonth(), dd.getDate())
       return ddOnly >= todayOnly
@@ -285,30 +386,34 @@ const filteredDays = computed(() => {
   }
 
   if (showDays.value !== 'all') {
-    list = list.filter(d => d.type === showDays.value)
+    list = list.filter(function (d) { return d.type === showDays.value })
   }
 
   if (showScope.value === 'week') {
     const currentWeek = getISOWeek(new Date())
-    list = list.filter(d => getISOWeek(parseISO(d.date)) === currentWeek)
+    list = list.filter(function (d) {
+      return getISOWeek(parseISO(d.date)) === currentWeek
+    })
   }
 
   return list
 })
 
-const workDaysCount = computed(() =>
-    filteredDays.value.filter(day => day.type === 'work').length
-)
-const offDaysCount = computed(() =>
-    filteredDays.value.filter(day => day.type === 'off').length
-)
-const totalWorkHours = computed(() =>
-    workDaysCount.value * (pattern.value?.working_day_duration || 8)
-)
+const workDaysCount = computed(function () {
+  return filteredDays.value.filter(function (day) { return day.type === 'work' }).length
+})
+const offDaysCount = computed(function () {
+  return filteredDays.value.filter(function (day) { return day.type === 'off' }).length
+})
+const totalWorkHours = computed(function () {
+  const dur = (pattern.value && typeof pattern.value.working_day_duration === 'number')
+      ? pattern.value.working_day_duration
+      : 8
+  return workDaysCount.value * dur
+})
 
-// 🧩 Всегда используем группы из API и фильтруем их по текущим условиям
-const groupedFilteredDays = computed(() => {
-  // Разрешённые даты после всех фильтров
+// 🧩 Группы из API + фильтрация по allowedDates
+const groupedFilteredDays = computed(function () {
   const allowedDates = new Set()
   for (let i = 0; i < filteredDays.value.length; i++) {
     const d = filteredDays.value[i]
@@ -329,9 +434,7 @@ const groupedFilteredDays = computed(() => {
             kept.push(day)
           }
         }
-        if (kept.length > 0) {
-          result.push(kept)
-        }
+        if (kept.length > 0) result.push(kept)
       }
     }
   }
@@ -339,7 +442,7 @@ const groupedFilteredDays = computed(() => {
 })
 
 // --- USER ROLES / SELECT OPTIONS ---
-const isManager = computed(() => {
+const isManager = computed(function () {
   const user = currentUser.value
   if (!user) return false
 
@@ -347,51 +450,61 @@ const isManager = computed(() => {
 
   const roleCandidates = []
   if (typeof user.role === 'string') roleCandidates.push(user.role)
-  if (Array.isArray(user.roles)) roleCandidates.push(...user.roles)
-  if (Array.isArray(user.role)) roleCandidates.push(...user.role)
+  if (Array.isArray(user.roles)) {
+    for (let i = 0; i < user.roles.length; i++) roleCandidates.push(user.roles[i])
+  }
+  if (Array.isArray(user.role)) {
+    for (let i = 0; i < user.role.length; i++) roleCandidates.push(user.role[i])
+  }
   if (Array.isArray(user.groups)) {
-    for (const group of user.groups) {
+    for (let i = 0; i < user.groups.length; i++) {
+      const group = user.groups[i]
       if (typeof group === 'string') roleCandidates.push(group)
       else if (group && typeof group.name === 'string') roleCandidates.push(group.name)
     }
   }
-  return roleCandidates.some(r => typeof r === 'string' && r.toLowerCase().includes('manager'))
+  for (let i = 0; i < roleCandidates.length; i++) {
+    const r = roleCandidates[i]
+    if (typeof r === 'string' && r.toLowerCase().indexOf('manager') !== -1) return true
+  }
+  return false
 })
 
-const showUserSelector = computed(() => isManager.value)
+const showUserSelector = computed(function () {
+  return isManager.value
+})
 
 const usersLoadedFromApi = ref(false)
 
 function logCurrentUserAccess() {
   console.log('Текущая информация о пользователе:', currentUser.value)
-  if (isManager.value) {
-    console.log('Текущий пользователь менеджер')
-  } else {
-    console.log('Текущий пользователь не менеджер')
-  }
+  if (isManager.value) console.log('Текущий пользователь менеджер')
+  else console.log('Текущий пользователь не менеджер')
 }
 
-watch([currentUser, isManager], () => {
+watch([currentUser, isManager], function () {
   logCurrentUserAccess()
 }, { immediate: true })
 
 // 🔓 Разблокировка селекта для менеджера
-watch(isManager, (canManage) => {
-  if (canManage === true) {
-    userSelectorLocked.value = false
-  } else {
-    userSelectorLocked.value = true
-  }
+watch(isManager, function (canManage) {
+  userSelectorLocked.value = !canManage
 }, { immediate: true })
 
 function mergeUserOptions(candidates) {
   if (!Array.isArray(candidates)) return
-  const map = new Map(userOptions.value.map(u => [u.id, u]))
-  for (const c of candidates) {
+  const map = new Map()
+  for (let i = 0; i < userOptions.value.length; i++) {
+    const u = userOptions.value[i]
+    map.set(u.id, u)
+  }
+  for (let i = 0; i < candidates.length; i++) {
+    const c = candidates[i]
     if (!c || typeof c !== 'object') continue
     const id = c.id
     if (id === undefined || id === null) continue
-    map.set(id, { ...(map.get(id) || {}), ...c })
+    const prev = map.get(id) || {}
+    map.set(id, Object.assign({}, prev, c))
   }
   userOptions.value = Array.from(map.values())
 }
@@ -399,9 +512,13 @@ function mergeUserOptions(candidates) {
 async function loadUserOptions() {
   if (usersLoadedFromApi.value) return
   try {
-    console.log("сейчас будем брать юзеров")
+    console.log('сейчас будем брать юзеров')
     const res = await axios.get('identity/users_unsafe/')
-    const payload = Array.isArray(res.data?.results) ? res.data.results : res.data
+    const dataPayload = res.data
+    let payload = dataPayload
+    if (dataPayload && Array.isArray(dataPayload.results)) {
+      payload = dataPayload.results
+    }
     if (Array.isArray(payload)) mergeUserOptions(payload)
   } catch (err) {
     console.warn('Не удалось загрузить полный список пользователей, используем fallback из расписаний', err)
@@ -410,7 +527,7 @@ async function loadUserOptions() {
   }
 }
 
-watch(currentUser, (user) => {
+watch(currentUser, function (user) {
   if (!user || !user.id) return
   if (isManager.value) {
     mergeUserOptions([user])
@@ -421,10 +538,10 @@ watch(currentUser, (user) => {
   }
 }, { immediate: true })
 
-watch(isManager, async (canManage) => {
+watch(isManager, async function (canManage) {
   if (canManage) {
     await loadUserOptions()
-    if (currentUser.value?.id && !selectedUser.value) {
+    if (currentUser.value && currentUser.value.id && !selectedUser.value) {
       selectedUser.value = currentUser.value.id
     }
   } else if (currentUser.value) {
@@ -433,8 +550,8 @@ watch(isManager, async (canManage) => {
   }
 }, { immediate: true })
 
-watch([isManager, currentUser, selectedUser], ([manager, user, selected]) => {
-  if (!manager && user?.id && selected !== user.id) {
+watch([isManager, currentUser, selectedUser], function ([manager, user, selected]) {
+  if (!manager && user && user.id && selected !== user.id) {
     selectedUser.value = user.id
   }
 })
@@ -449,14 +566,15 @@ onMounted(async () => {
     const months = new Set()
     const usersMap = new Map()
 
-    for (const item of data) {
+    for (let i = 0; i < data.length; i++) {
+      const item = data[i]
       years.add(item.year)
       months.add(item.month)
       if (item.user && !usersMap.has(item.user.id)) usersMap.set(item.user.id, item.user)
     }
 
-    availableYears.value = [...years].sort()
-    availableMonths.value = [...months].sort((a, b) => a - b)
+    availableYears.value = Array.from(years).sort()
+    availableMonths.value = Array.from(months).sort(function (a, b) { return a - b })
 
     const fallbackUsers = Array.from(usersMap.values())
     if (fallbackUsers.length) mergeUserOptions(fallbackUsers)
@@ -467,15 +585,54 @@ onMounted(async () => {
 })
 
 async function loadAllEvents(year, month) {
+  // 🔕 Пока оверрайд включён — полностью игнорируем таски
+  if (USE_TEMP_OVERRIDE) {
+    tasks.value = {}
+    return
+  }
+
   loading.value = true
   try {
-    const res = await axios.get(`schedule/all_events/?year=${year}&month=${month}`)
-    const data = res.data
+    const res = await axios.get('schedule/all_events/?year=' + year + '&month=' + month)
+    const raw = res.data
+
+    let payloadEvents = []
+    if (Array.isArray(raw)) {
+      payloadEvents = raw
+    } else if (raw && Array.isArray(raw.events)) {
+      payloadEvents = raw.events
+    }
+
+    const meta = raw && raw.meta ? raw.meta : null
+    console.log('[all_events] meta:', meta)
+    console.log('[all_events] count(raw):', payloadEvents.length)
+
+    for (let i = 0; i < payloadEvents.length; i++) {
+      const e = payloadEvents[i]
+      const rawIso = (e && typeof e.datetime === 'string' && e.datetime.length > 0)
+          ? e.datetime
+          : (e && e.event && typeof e.event.starts_at === 'string' ? e.event.starts_at : null)
+      if (!rawIso) {
+        console.warn('[all_events] missing datetime for', { id: e ? e.id : null, source_event_id: e ? e.source_event_id : null })
+      } else {
+        const d = new Date(rawIso)
+        if (isNaN(d.getTime())) {
+          console.warn('[all_events] unparsable date', { id: e ? e.id : null, rawIso: rawIso })
+        }
+      }
+    }
+
+    const normalized = []
+    for (let i = 0; i < payloadEvents.length; i++) {
+      const ne = normalizeEvent(payloadEvents[i])
+      if (ne) normalized.push(ne)
+    }
+    console.log('[all_events] count(normalized):', normalized.length)
 
     const visible = []
-    for (let i = 0; i < data.length; i++) {
-      const item = data[i]
-      if (item && (showCancelled.value || !isCancelledTask(item))) {
+    for (let i = 0; i < normalized.length; i++) {
+      const item = normalized[i]
+      if (showCancelled.value || !isCancelledTask(item)) {
         visible.push(item)
       }
     }
@@ -498,18 +655,33 @@ async function loadAllEvents(year, month) {
 }
 
 // --- WATCH FILTERS & LOAD DAYS ---
-watch([selectedUser, selectedMonth, selectedYear], async ([user, month, year]) => {
+watch([selectedUser, selectedMonth, selectedYear], async function ([user, month, year]) {
   if (!user || !month || !year) return
   loading.value = true
   try {
-    const res = await axios.get(`schedule/preview?year=${year}&month=${month}&user=${user}`)
+    const res = await axios.get('schedule/preview?year=' + year + '&month=' + month + '&user=' + user)
     const data = res.data
-    days.value = data.days
-    groups.value = data.groups
-    pattern.value = data.pattern
-    tasks.value = data.tasks || {}
 
-    // выкидываем cancelled из tasks, если пришли из /preview
+    days.value = data && Array.isArray(data.days) ? data.days : []
+    groups.value = data && Array.isArray(data.groups) ? data.groups : []
+    pattern.value = data && data.pattern ? data.pattern : {}
+    tasks.value = (data && typeof data.tasks === 'object' && data.tasks !== null) ? data.tasks : {}
+
+    console.log('[preview] days:', Array.isArray(days.value) ? days.value.length : 0)
+    console.log('[preview] groups:', Array.isArray(groups.value) ? groups.value.length : 0)
+
+    // --- 🔥 Временная подмена на требуемую схему ---
+    if (USE_TEMP_OVERRIDE) {
+      const built = buildTempSchedule(year, month)
+      days.value = built.days
+      groups.value = built.groups
+      pattern.value = built.pattern
+      tasks.value = {} // не рисуем all_events
+      await nextTick()
+      return // не зовём loadAllEvents
+    }
+
+    // выкидываем cancelled из tasks (если пришли из /preview)
     if (tasks.value && typeof tasks.value === 'object') {
       const cleaned = {}
       const keys = Object.keys(tasks.value)
@@ -520,7 +692,8 @@ watch([selectedUser, selectedMonth, selectedYear], async ([user, month, year]) =
           const kept = []
           for (let j = 0; j < arr.length; j++) {
             const t = arr[j]
-            if (t && (showCancelled.value || t.status !== 'cancelled')) {
+            const statusStr = (t && typeof t.status === 'string') ? t.status : ''
+            if (showCancelled.value || statusStr !== 'cancelled') {
               kept.push(t)
             }
           }
@@ -616,6 +789,13 @@ watch([selectedUser, selectedMonth, selectedYear], async ([user, month, year]) =
 
 .day-number {
   position: relative;
+}
+
+/* 🔶 Подсветка форсированного рабочего дня */
+.forced-day {
+  outline: 2px dashed var(--el-color-warning);
+  outline-offset: 3px;
+  border-radius: 8px;
 }
 </style>
 
