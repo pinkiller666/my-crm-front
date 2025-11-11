@@ -37,3 +37,6 @@ dist/
 .DS_Store
 
 current-codex-patch
+codex.patch
+fix-monthoverview-clean-fixed.patch
+fix-monthoverview-clean.patch
