@@ -153,8 +153,8 @@ const submitForm = async () => {
   try {
     const method = props.initialEvent ? 'PATCH' : 'POST';
     const url = props.initialEvent
-        ? `/api/schedule/events/${props.initialEvent.id}/`
-        : '/api/schedule/events/';
+        ? `schedule/events/${props.initialEvent.id}/`
+        : 'schedule/events/';
 
     const result = await axios({
       method: method,

@@ -132,7 +132,7 @@ async function submitTask() {
       start_datetime: isoDatetime
     }
 
-    const response = await axios.post('/api/schedule/events/', payload)
+    const response = await axios.post('schedule/events/', payload)
 
     emit('addTask', response.data)
 
@@ -200,7 +200,7 @@ onBeforeUnmount(() => {
 
   /* базовые цвета (можно позже заменить на CSS-переменные темы) */
   --num-bg: transparent;
-  --num-fg: #23262f;
+  --num-fg: #ffb347;
 
   &:hover { background: #f5f7fa; }
   &.today { border: 2px solid #409eff; border-radius: 10px; }

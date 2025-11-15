@@ -1,0 +1,659 @@
+diff --git a/common/datetime.py b/common/datetime.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..82c0141a0db58c9d5daf17f47d039681b43e3e79
+--- /dev/null
++++ b/common/datetime.py
+@@ -0,0 +1,27 @@
++from __future__ import annotations
++
++from datetime import datetime
++from typing import Optional
++
++from django.utils import timezone
++
++
++def ensure_timezone(dt: Optional[datetime], *, tz=None) -> Optional[datetime]:
++    """Return a timezone-aware datetime in the requested timezone.
++
++    * Converts naive values to the current timezone (or provided `tz`).
++    * Normalises aware values to the provided timezone when requested.
++    * Leaves ``None`` untouched.
++    """
++    if dt is None:
++        return None
++
++    tz = tz or timezone.get_current_timezone()
++
++    if timezone.is_naive(dt):
++        return timezone.make_aware(dt, tz)
++
++    if tz:
++        return timezone.localtime(dt, tz)
++
++    return dt
+diff --git a/schedule/models.py b/schedule/models.py
+index e82b544e341a242fa6b8d7677a30be54c1caddb7..0e15bda6d38f8453be527876d67e7c9c9dbe50fa 100644
+--- a/schedule/models.py
++++ b/schedule/models.py
+@@ -1,39 +1,40 @@
+ from recurrence.fields import RecurrenceField
+ from django.utils import timezone
+ 
+ from copy import deepcopy
+ from datetime import datetime, timedelta
+ import calendar
+ 
+ from decimal import Decimal, ROUND_FLOOR
+ from django.core.exceptions import ValidationError
+ from django.db import models
+ from django.conf import settings
+ from datetime import date
+ from django.db.models import Q
+ from common.choices import EventDateMode
++from common.datetime import ensure_timezone
+ 
+ 
+ class CompletionStatus(models.TextChoices):
+     INCOMPLETE = 'incomplete', 'INCOMPLETE'
+     COMPLETE = 'complete', 'COMPLETE'
+     CANCELLED = 'cancelled', 'CANCELLED'
+     ON_PAUSE = 'on_pause', 'ON_PAUSE'
+     IN_PROCESS = 'in_process', 'IN_PROCESS'
+ 
+ 
+ class DayType(models.TextChoices):
+     WORK = 'work', 'Рабочий'
+     OFF = 'off', 'Выходной'
+     HOLIDAY = 'holiday', 'Праздник'
+     VACATION = 'vacation', 'Отпуск'
+     TASK = 'task', 'Дело'
+ 
+ 
+ class Event(models.Model):
+     class EventType(models.TextChoices):
+         EVENT = 'event', 'Событие'
+         TASK = 'task', 'Задача'
+ 
+     class CategoryChoices(models.TextChoices):
+         WORK = 'work', 'Рабочее'
+@@ -164,50 +165,53 @@ class Event(models.Model):
+                     raise ValidationError("Для неповторяемого MONTH-события укажите 'start_datetime' (год+месяц).")
+                 # Интервал при одиночном MONTH-событии не должен быть задан
+                 if self.month_interval:
+                     raise ValidationError("Поле 'month_interval' заполняется только для повторяемого MONTH-события.")
+ 
+     def save(self, *args, **kwargs):
+         # синхронизация статуса/галочки
+         if self.status == CompletionStatus.COMPLETE:
+             self.is_completed = True
+         else:
+             self.is_completed = False
+ 
+         # 👇 автоподстановка счёта, если не указан
+         if self.account is None and self.user_id:
+             from accounting.models import Account  # локальный импорт, чтобы избежать циклов
+             primary = Account.objects.filter(user_id=self.user_id, is_primary=True).first()
+             if primary is None:
+                 # если по каким-то причинам первичного нет — создадим его
+                 primary = Account.objects.create(
+                     user_id=self.user_id,
+                     name="Основной счёт",
+                     is_primary=True,
+                     balance=0
+                 )
+             self.account = primary
++        current_tz = timezone.get_current_timezone()
++        self.start_datetime = ensure_timezone(self.start_datetime, tz=current_tz)
++        self.end_datetime = ensure_timezone(self.end_datetime, tz=current_tz)
+         if self.date_mode == EventDateMode.NUMBER_OF_MONTH:
+             if self.start_datetime:
+                 self.start_datetime = self.start_datetime.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+             if self.is_recurring_monthly and self.end_datetime:
+                 self.end_datetime = self.end_datetime.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+ 
+         super().save(*args, **kwargs)
+ 
+     class Meta:
+         verbose_name = "Событие или задача"
+         verbose_name_plural = "События и задачи"
+ 
+     def __str__(self):
+         return f"[{self.get_event_type_display()}] {self.name or self.title or 'Без названия'}"
+ 
+ 
+     def get_occurrences(self, start_dt, end_dt, tz):
+         """
+         Возвращает список occurrence-событий в диапазоне [start_dt, end_dt].
+         """
+         occurrences = []
+         mode = self.date_mode
+ 
+         def _copy_with_datetime(dt: datetime):
+             from copy import deepcopy
+@@ -264,50 +268,51 @@ class Event(models.Model):
+             )
+             for dt in recurrences:
+                 instance = self.instances.filter(instance_datetime=dt).first()
+                 copy_obj = _copy_with_datetime(dt)
+                 if instance:
+                     copy_obj.status = instance.status
+                     copy_obj.is_completed = instance.is_completed
+                 occurrences.append(copy_obj)
+ 
+         return occurrences
+ 
+ 
+ class EventInstance(models.Model):
+     parent_event = models.ForeignKey('Event', on_delete=models.CASCADE, related_name='instances')
+     instance_datetime = models.DateTimeField()
+     status = models.CharField(max_length=50, choices=CompletionStatus.choices, default=CompletionStatus.INCOMPLETE)
+     is_completed = models.BooleanField(default=False)
+     modified_at = models.DateTimeField(auto_now=True)
+ 
+     def save(self, *args, **kwargs):
+         # синхронизируем is_completed со статусом
+         if self.status == CompletionStatus.COMPLETE:
+             self.is_completed = True
+         else:
+             self.is_completed = False
++        self.instance_datetime = ensure_timezone(self.instance_datetime, tz=timezone.get_current_timezone())
+         super().save(*args, **kwargs)
+ 
+     def __str__(self):
+         return f"{self.parent_event.name} ({self.instance_datetime.strftime('%Y-%m-%d %H:%M')})"
+ 
+ 
+ class Slot(models.Model):
+     date_range = models.DateTimeField()
+     status = models.CharField(max_length=255, choices=[('available', 'Available'), ('booked', 'Booked')])
+ 
+     def __str__(self):
+         return f"Slot {self.date_range} - {self.status}"
+ 
+ 
+ class PatternMode(models.TextChoices):
+     ALTERNATING = 'alternating', 'Чередование блоков'
+     WEEKDAY = 'weekday', 'По дням недели'
+ 
+ 
+ def validate_quarter_hours(value: Decimal):
+     # кратно 0.25 (15 минут)
+     mult = (value * Decimal('4'))
+     if mult != mult.to_integral_value(rounding=ROUND_FLOOR):
+         raise ValidationError('Длительность должна быть кратна 0.25 часа (15 минут).')
+ 
+diff --git a/schedule/serializers.py b/schedule/serializers.py
+index 5cde639773110bd7851c7302d08c8bd79403c7c5..50a5c6fb5a2aed2943450d1cac758a4e4b9dbd6f 100644
+--- a/schedule/serializers.py
++++ b/schedule/serializers.py
+@@ -1,38 +1,59 @@
++from django.utils import timezone
+ from rest_framework import serializers
+ from accounting.models import Account  # ✅ нужен для PK-поля account_id
+ from .models import (
+     Event, EventInstance, Slot,
+     SchedulePattern, MonthSchedule, DayOverride
+ )
+ from identity.serializers import UserSerializer
++from common.datetime import ensure_timezone
++
++
++class AwareDateTimeField(serializers.DateTimeField):
++    default_error_messages = {
++        **serializers.DateTimeField.default_error_messages,
++        "required_timezone": "Datetime value must include timezone information (e.g. '+03:00').",
++    }
++
++    def to_internal_value(self, value):
++        dt = super().to_internal_value(value)
++        if timezone.is_naive(dt):
++            self.fail("required_timezone")
++        return timezone.localtime(dt, timezone.get_current_timezone())
++
++    def to_representation(self, value):
++        if value is None:
++            return None
++        aware_value = ensure_timezone(value, tz=timezone.get_current_timezone())
++        return super().to_representation(aware_value)
+ 
+ 
+ class EventSerializer(serializers.ModelSerializer):
+     # ——— Переименованные поля дат для фронта (из модели: start_datetime/end_datetime)
+-    starts_at = serializers.DateTimeField(source="start_datetime", required=False)
+-    ends_at = serializers.DateTimeField(source="end_datetime", allow_null=True, required=False)
++    starts_at = AwareDateTimeField(source="start_datetime", required=False)
++    ends_at = AwareDateTimeField(source="end_datetime", allow_null=True, required=False)
+ 
+     # ——— Простой PK вместо вложенного account-объекта
+     account_id = serializers.PrimaryKeyRelatedField(
+         source="account",
+         queryset=Account.objects.all(),
+         allow_null=True,
+         required=False
+     )
+ 
+     user_id = serializers.IntegerField(read_only=True)
+ 
+     # ——— Виртуальные/вычисляемые поля
+     rrule = serializers.SerializerMethodField()
+     rrule_exceptions = serializers.SerializerMethodField()
+     is_recurring = serializers.SerializerMethodField()
+ 
+     class Meta:
+         model = Event
+         fields = (
+             # базовые
+             "id",
+             "event_type",
+             "category",
+             "type",
+             "name",
+@@ -62,50 +83,51 @@ class EventSerializer(serializers.ModelSerializer):
+             "tags",
+             "duration_minutes",
+             "month_year",
+             "month_number",
+             "date_day",
+             "user_id",
+         )
+ 
+     # ——— Методы для виртуальных полей
+     def get_rrule(self, obj):
+         # RecurrenceField → строка; если пусто — None
+         return str(obj.recurrence) if getattr(obj, "recurrence", None) else None
+ 
+     def get_rrule_exceptions(self, obj):
+         # Пока исключений нет — фронту стабильно возвращаем список
+         return []
+ 
+     def get_is_recurring(self, obj):
+         # True, если есть RRULE или твой флаг ежемесячной повторяемости
+         has_rrule = bool(getattr(obj, "recurrence", None))
+         has_monthly = bool(getattr(obj, "is_recurring_monthly", False))
+         return has_rrule or has_monthly
+ 
+ 
+ class EventInstanceSerializer(serializers.ModelSerializer):
++    instance_datetime = AwareDateTimeField()
+     class Meta:
+         model = EventInstance
+         fields = '__all__'
+ 
+     def validate_event(self, value):
+         """Гарантия, что выбирается только свой Event (удобно для DRF Browsable API)."""
+         request = self.context.get("request")
+         if request is None:
+             return value
+         if value.user != request.user:
+             raise serializers.ValidationError("Select your own event only.")
+         return value
+ 
+ 
+ class SlotSerializer(serializers.ModelSerializer):
+     class Meta:
+         model = Slot
+         fields = '__all__'
+ 
+ 
+ class SchedulePatternSerializer(serializers.ModelSerializer):
+     cycle_length = serializers.IntegerField(read_only=True)
+ 
+     class Meta:
+         model = SchedulePattern
+diff --git a/schedule/views.py b/schedule/views.py
+index b1316341c0c7c779da82ef72c8cd4477cb7868ec..c0d3d794c5a837a79fb6cd6fd316e3dfc07966cf 100644
+--- a/schedule/views.py
++++ b/schedule/views.py
+@@ -8,50 +8,51 @@ from django.db.models import Q
+ from django.shortcuts import get_object_or_404
+ from django.utils import timezone
+ from django.utils.timezone import make_aware, make_naive
+ 
+ from rest_framework import generics, status, viewsets
+ from rest_framework.decorators import api_view, permission_classes
+ from rest_framework.exceptions import ValidationError
+ from rest_framework.permissions import IsAuthenticated
+ from rest_framework.response import Response
+ from rest_framework.views import APIView
+ 
+ from common.choices import EventDateMode
+ from .models import (
+     CompletionStatus, Event, EventInstance, Slot,
+     SchedulePattern, MonthSchedule, DayOverride
+ )
+ from .serializers import (
+     EventSerializer, EventInstanceSerializer, SlotSerializer,
+     SchedulePatternSerializer, MonthScheduleSerializer, DayOverrideSerializer
+ )
+ from .utils.schedule_helper import generate_day_types, return_groups_by_pattern
+ from .weekdays import Weekday
+ 
+ from schedule.models import PatternMode
+ from .utils.schedule_helper import group_days_by_cycles
++from common.datetime import ensure_timezone
+ 
+ 
+ logger = logging.getLogger(__name__)
+ 
+ 
+ class UserScopedQuerySetMixin:
+     """Фильтрует queryset по текущему пользователю через поле user_lookup."""
+     user_lookup = "user"  # имя поля, по которому связана модель с пользователем
+ 
+     def get_queryset(self):
+         qs = super().get_queryset()
+         return qs.filter(**{self.user_lookup: self.request.user})
+ 
+ 
+ class EventViewSet(UserScopedQuerySetMixin, viewsets.ModelViewSet):
+     permission_classes = [IsAuthenticated]
+     serializer_class = EventSerializer
+     queryset = Event.objects.all()  # базовый queryset для миксина
+ 
+     def perform_create(self, serializer):
+         # user выставляем на сервере, а в сериализаторе делаем read_only=True
+         serializer.save(user=self.request.user)
+ 
+ 
+ class EventInstanceViewSet(UserScopedQuerySetMixin, viewsets.ModelViewSet):
+@@ -100,190 +101,197 @@ class EventExpandedListView(generics.ListAPIView):
+             raise ValidationError({"detail": "'year' and 'month' must be integers."})
+ 
+         tz = timezone.get_current_timezone()
+         debug_mode = settings.DEBUG or (request.query_params.get('debug') == '1')
+         errors = []
+         debug_notes = []
+ 
+         # --- helpers ---
+         def _first_of_month(dt):
+             if dt is None:
+                 return None
+             # приводим к локальному tz и делаем ровно 00:00 первого числа
+             if dt.tzinfo is None:
+                 aware = make_aware(dt, tz)
+             else:
+                 aware = timezone.localtime(dt, tz)
+             aware = aware.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+             return aware
+ 
+         def _add_months(dt, months):
+             # dt — AWARE; крутим месяцы и сохраняем tz корректно
+             y = dt.year + (dt.month - 1 + months) // 12
+             m = (dt.month - 1 + months) % 12 + 1
+             return dt.replace(year=y, month=m)
+ 
++        def _serialize_datetime(value):
++            aware_value = ensure_timezone(value, tz=tz)
++            return aware_value.isoformat()
++
+         # --- границы выбранного месяца [start_dt, end_dt] (aware) ---
+         start_dt = make_aware(datetime(year, month, 1, 0, 0, 0), tz)
+         if month == 12:
+             next_month = make_aware(datetime(year + 1, 1, 1, 0, 0, 0), tz)
+         else:
+             next_month = make_aware(datetime(year, month + 1, 1, 0, 0, 0), tz)
+         end_dt = next_month - timedelta(seconds=1)
+ 
+         events_data = []
+ 
+         # ⚠️ фильтруем только события текущего пользователя
+         events = Event.objects.filter(
+             user=request.user
+         ).filter(
+             Q(start_datetime__lte=end_dt) &
+             (Q(end_datetime__gte=start_dt) | Q(end_datetime__isnull=True))
+         )[:1000]  # safety cap
+ 
+         for event in events:
+             try:
+                 rtype = get_recurrence_type(event)
+ 
+                 # =========================
+                 # A) MONTH-режим (NUMBER_OF_MONTH)
+                 # =========================
+                 if event.date_mode == EventDateMode.NUMBER_OF_MONTH:
+                     # 1) одиночное "за месяц"
+                     if not event.is_recurring_monthly:
+                         anchor = _first_of_month(event.start_datetime)
+                         if anchor and (start_dt <= anchor <= end_dt):
+                             occurrence_id = str(event.id)
+                             events_data.append({
+                                 "id": occurrence_id,
+                                 "occurrence_id": occurrence_id,
+                                 "source_event_id": event.id,
+                                 "instance_id": None,
+-                                "datetime": anchor,
++                                "datetime": _serialize_datetime(anchor),
+                                 "event": EventSerializer(
+                                     event, context={"request": request}
+                                 ).data,
+                                 "overlay": None,
+                                 "is_recurring": False,
+                                 "recurrence_type": "single",
+                             })
+                         continue  # MONTH-ветка обработана
+ 
+                     # 2) повторяемое "каждые N месяцев"
+                     interval = int(event.month_interval or 1)
+                     series_start = _first_of_month(event.start_datetime)
+                     series_end = _first_of_month(event.end_datetime)
+ 
+                     if not series_start or not series_end:
+                         # на валидатор надеемся, но защитимся от битых данных
+                         debug_notes.append({
+                             "event_id": event.id,
+                             "note": "monthly series skipped due to missing series_start/series_end"
+                         })
+                         continue
+ 
+                     current = series_start
+                     while current <= series_end:
+                         if start_dt <= current <= end_dt:
++                            current_aware = ensure_timezone(current, tz=tz)
+                             instance = EventInstance.objects.filter(
+                                 parent_event=event,
+-                                instance_datetime=current
++                                instance_datetime=current_aware
+                             ).first()
+-                            unique_id = f"{event.id}_{int(current.timestamp())}"
++                            unique_id = f"{event.id}_{int(current_aware.timestamp())}"
+ 
+                             events_data.append({
+                                 "id": unique_id,
+                                 "occurrence_id": unique_id,
+                                 "source_event_id": event.id,
+                                 "instance_id": instance.id if instance else None,
+-                                "datetime": current,
++                                "datetime": current_aware.isoformat(),
+                                 "event": EventSerializer(
+                                     instance.parent_event if instance else event,
+                                     context={"request": request}
+                                 ).data,
+                                 "overlay": EventInstanceSerializer(
+                                     instance, context={"request": request}
+                                 ).data if instance else None,
+                                 "is_recurring": True,
+                                 "recurrence_type": "monthly",
+                             })
+                         current = _add_months(current, interval)
+ 
+                     continue  # MONTH-ветка обработана
+ 
+                 # =========================
+                 # B) EXACT_DATE (без RRULE) => одиночное
+                 # =========================
+                 if rtype == 'single' and not event.recurrence:
+                     if start_dt <= event.start_datetime <= end_dt:
++                        event_start = ensure_timezone(event.start_datetime, tz=tz)
+                         occurrence_id = str(event.id)
+                         events_data.append({
+                             "id": occurrence_id,
+                             "occurrence_id": occurrence_id,
+                             "source_event_id": event.id,
+                             "instance_id": None,
+-                            "datetime": event.start_datetime,
++                            "datetime": event_start.isoformat(),
+                             "event": EventSerializer(
+                                 event, context={"request": request}
+                             ).data,
+                             "overlay": None,
+                             "is_recurring": False,
+                             "recurrence_type": "single",
+                         })
+                     continue
+ 
+                 # =========================
+                 # C) EXACT_DATE + RRULE
+                 # =========================
+                 if event.recurrence:
+                     # django-recurrence обычно дружит с naive датами
+                     start_naive = make_naive(start_dt, tz)
+                     end_naive = make_naive(end_dt, tz)
+                     dtstart_naive = datetime(2010, 1, 1, 0, 0, 0)
+ 
+                     recurrences = event.recurrence.between(
+                         start_naive,
+                         end_naive,
+                         inc=True,
+                         dtstart=dtstart_naive
+                     )
+                     for recurrence in recurrences:
+                         # recurrence приходит naive — делаем его aware
+                         recurrence_aware = make_aware(recurrence, tz)
+ 
+                         unique_id = f"{event.id}_{int(recurrence_aware.timestamp())}"
++                        normalized = ensure_timezone(recurrence_aware, tz=tz)
+                         instance = EventInstance.objects.filter(
+                             parent_event=event,
+-                            instance_datetime=recurrence_aware
++                            instance_datetime=normalized
+                         ).first()
+ 
+                         events_data.append({
+                             "id": unique_id,
+                             "occurrence_id": unique_id,
+                             "source_event_id": event.id,
+                             "instance_id": instance.id if instance else None,
+-                            "datetime": recurrence_aware,
++                            "datetime": normalized.isoformat(),
+                             "event": EventSerializer(
+                                 instance.parent_event if instance else event,
+                                 context={"request": request}
+                             ).data,
+                             "overlay": EventInstanceSerializer(
+                                 instance, context={"request": request}
+                             ).data if instance else None,
+                             "is_recurring": True,
+                             "recurrence_type": "rrule",
+                         })
+ 
+             except Exception as e:
+                 # Лог в консоль со стеком и контекстом
+                 logger.exception(
+                     "all_events crash on event %s (user=%s, year=%s, month=%s)",
+                     getattr(event, "id", None), getattr(request.user, "id", None), year, month
+                 )
+                 # В ответ для дебага (если можно)
+                 errors.append({
+                     "event_id": getattr(event, "id", None),
+                     "msg": str(e),
+                     "rtype": locals().get("rtype", None),
+                     "date_mode": getattr(event, "date_mode", None),
+                 })
+                 continue
+@@ -343,83 +351,93 @@ def group_days_by_iso_week(days):
+             current_group = [day]
+ 
+     if current_group:
+         groups.append(current_group)
+ 
+     return groups
+ 
+ 
+ class DeleteEventOrOccurrenceView(APIView):
+     permission_classes = [IsAuthenticated]
+ 
+     def delete(self, request, *args, **kwargs):
+         event_id = kwargs.get('event_id')
+         instance_ts = request.query_params.get('instance_datetime')
+ 
+         if not instance_ts:
+             # Удаляем корневое событие
+             event = get_object_or_404(Event, pk=event_id)
+             event.delete()
+             return Response({"detail": "Event deleted."}, status=status.HTTP_204_NO_CONTENT)
+ 
+         # Обрабатываем удаление отдельного вхождения
+         try:
+             instance_dt = datetime.fromisoformat(instance_ts)
+         except ValueError:
+-            return Response({"detail": "Invalid datetime format. Use ISO format."}, status=status.HTTP_400_BAD_REQUEST)
++            return Response({"detail": "Invalid datetime format. Use ISO format with timezone."}, status=status.HTTP_400_BAD_REQUEST)
++
++        if timezone.is_naive(instance_dt):
++            return Response({"detail": "Datetime must include timezone information (e.g. '+03:00')."}, status=status.HTTP_400_BAD_REQUEST)
++
++        instance_dt = ensure_timezone(instance_dt, tz=timezone.get_current_timezone())
+ 
+         event = get_object_or_404(Event, pk=event_id)
+ 
+         instance, created = EventInstance.objects.get_or_create(
+             parent_event=event,
+             instance_datetime=instance_dt,
+             defaults={"status": CompletionStatus.CANCELLED}
+         )
+ 
+         if not created:
+             instance.status = CompletionStatus.CANCELLED
+             instance.save()
+ 
+         return Response({"detail": "Occurrence cancelled."}, status=status.HTTP_200_OK)
+ 
+ 
+ class UpdateOccurrenceStatusView(APIView):
+     permission_classes = [IsAuthenticated]
+ 
+     def patch(self, request, *args, **kwargs):
+         event_id = kwargs.get('event_id')
+         instance_ts = request.data.get('instance_datetime')
+         new_status = request.data.get('status')
+         is_completed = request.data.get('is_completed')
+ 
+         if not instance_ts or not new_status:
+             return Response({"detail": "Both instance_datetime and status are required."}, status=400)
+ 
+         try:
+             instance_dt = datetime.fromisoformat(instance_ts)
+         except ValueError:
+-            return Response({"detail": "Invalid datetime format."}, status=400)
++            return Response({"detail": "Invalid datetime format. Use ISO format with timezone."}, status=400)
++
++        if timezone.is_naive(instance_dt):
++            return Response({"detail": "Datetime must include timezone information (e.g. '+03:00')."}, status=400)
++
++        instance_dt = ensure_timezone(instance_dt, tz=timezone.get_current_timezone())
+ 
+         if new_status not in CompletionStatus.values:
+             return Response({"detail": "Invalid status."}, status=400)
+ 
+         event = get_object_or_404(Event, pk=event_id)
+ 
+         instance, _ = EventInstance.objects.get_or_create(
+             parent_event=event,
+             instance_datetime=instance_dt
+         )
+         instance.status = new_status
+         instance.is_completed = is_completed
+         instance.save()
+ 
+         return Response({"detail": "Status updated."})
+ 
+ 
+ @api_view(['GET'])
+ @permission_classes([IsAuthenticated])
+ def schedule_preview(request):
+     """
+     Возвращает предварительный просмотр расписания за указанный год и месяц.
+     В ответе:
+       - список дней с типами (work/off/...),
+       - pattern для фронта,

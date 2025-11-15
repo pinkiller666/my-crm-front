@@ -165,7 +165,7 @@ const filteredTasks = computed(() => {
 
     const loadAllEvents = async () => {
       try {
-        const resp = await axios.get(`/api/schedule/all_events/?year=${currentYear.value}&month=${currentMonth.value}`)
+        const resp = await axios.get(`schedule/all_events/?year=${currentYear.value}&month=${currentMonth.value}`)
         tasks.value = resp.data
       } catch (err) { console.error(err) }
     }
@@ -190,7 +190,7 @@ const filteredTasks = computed(() => {
           with_person: draft.with_person,
           with_wait: draft.with_wait
         }
-        const response = await axios.post('/api/schedule/events/', payload)
+        const response = await axios.post('schedule/events/', payload)
         tasks.value.unshift({'event': response.data})
         Object.assign(draft, { name: '', type: '', with_person: false, with_wait: false })
         showForm.value = false
@@ -205,7 +205,7 @@ const handleCompleteTask = async (task, newStatus) => {
     }
 
     if (task.is_recurring) {
-      await axios.patch(`/api/schedule/events/${task.event.id}/update-status/`, payload)
+      await axios.patch(`schedule/events/${task.event.id}/update-status/`, payload)
       // обновляем локально overlay для конкретного вхождения
       const idx = tasks.value.findIndex(t => t.id === task.id)
       console.log(task.id)
@@ -215,7 +215,7 @@ const handleCompleteTask = async (task, newStatus) => {
         console.log(tasks.value[idx])
       }
     } else {
-      await axios.patch(`/api/schedule/events/${task.event.id}/`, {
+      await axios.patch(`schedule/events/${task.event.id}/`, {
         is_completed: newStatus,
         status: payload.status,
       })
@@ -240,7 +240,7 @@ const applyEdit = async () => {
       with_person: editBuf.event.with_person,
       with_wait: editBuf.event.with_wait
     }
-    await axios.patch(`/api/schedule/events/${editBuf.event.id}/`, payload)
+    await axios.patch(`schedule/events/${editBuf.event.id}/`, payload)
 
     // Патчим локально
     const idx = tasks.value.findIndex(t => t.id === editBuf.id)
@@ -257,11 +257,11 @@ const applyEdit = async () => {
 const handleRemoveTask = async (task) => {
   try {
     if (task.is_recurring) {
-      await axios.delete(`/api/schedule/events/${task.event.id}/delete/`, {
+      await axios.delete(`schedule/events/${task.event.id}/delete/`, {
         params: { instance_datetime: task.datetime }
       })
     } else {
-      await axios.delete(`/api/schedule/events/${task.event.id}/delete/`)
+      await axios.delete(`schedule/events/${task.event.id}/delete/`)
     }
       tasks.value = tasks.value.filter(t => t.id !== task.id)
 

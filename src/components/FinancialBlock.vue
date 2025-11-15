@@ -37,6 +37,7 @@
 import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { InfoFilled } from '@element-plus/icons-vue'
+import axios from '@/axios'
 
 const props = defineProps({ form: Object })
 
@@ -46,9 +47,7 @@ const loading = ref(false)
 onMounted(async () => {
   loading.value = true
   try {
-    const response = await fetch('/api/accounting/accounts/')
-    if (!response.ok) throw new Error('Ошибка загрузки аккаунтов')
-    const data = await response.json()
+    const { data } = await axios.get('accounting/accounts/')
     accounts.value = data
   } catch (err) {
     ElMessage.error('Не удалось загрузить аккаунты 😢')
