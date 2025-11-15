@@ -1,47 +1,98 @@
 <template>
   <span
-    :class="amountClass"
+      v-if="displayText !== null"
+      class="amount-number"
+      :class="{
+      'amount-positive': isPositive,
+      'amount-negative': isNegative
+    }"
   >
-    {{ formattedAmount }}
+    {{ displayText }}
   </span>
 </template>
 
-<script setup>
-import { computed } from 'vue'
+<script>
+export default {
+  name: 'AmountNumber',
+  props: {
+    amount: {
+      type: [Number, String],
+      required: true
+    }
+  },
+  computed: {
+    numericAmount () {
+      let value = this.amount
 
-const props = defineProps({
-  amount: {
-    type: [Number, String],
-    required: true
+      if (value === null || typeof value === 'undefined') {
+        return null
+      }
+
+      if (typeof value === 'string') {
+        const parsed = Number(value)
+        if (Number.isNaN(parsed)) {
+          return null
+        }
+        value = parsed
+      }
+
+      if (typeof value !== 'number' || !Number.isFinite(value)) {
+        return null
+      }
+
+      return value
+    },
+
+    isPositive () {
+      return this.numericAmount !== null && this.numericAmount > 0
+    },
+
+    isNegative () {
+      return this.numericAmount !== null && this.numericAmount < 0
+    },
+
+    displayText () {
+      if (this.numericAmount === null) {
+        return null
+      }
+
+      const absValue = Math.abs(this.numericAmount)
+
+      // форматируем с пробелами по разрядам, без копеек
+      const formatted = new Intl.NumberFormat('ru-RU', {
+        maximumFractionDigits: 0,
+        minimumFractionDigits: 0
+      }).format(absValue)
+
+      // доходы: "+ 10 000"
+      if (this.numericAmount > 0) {
+        return '+ ' + formatted
+      }
+
+      // расходы: "3 500" (БЕЗ минуса)
+      if (this.numericAmount < 0) {
+        return formatted
+      }
+
+      // ноль: просто "0"
+      return '0'
+    }
   }
-})
-
-
-const formattedAmount = computed(() => {
-  const amt = Number(props.amount) || 0
-  if (amt > 0) return `+${amt.toFixed(2)}`
-  if (amt < 0) return `${amt.toFixed(2)}`
-  return '0.00'
-})
-
-const amountClass = computed(() => {
-  const amt = Number(props.amount) || 0
-  if (amt > 0) return 'green-amount'
-  if (amt < 0) return 'red-amount'
-  return ''
-})
+}
 </script>
 
 <style scoped>
-.green-amount {
-  color: green;
+.amount-number {
+  font-weight: 500; /* такой же вес, как хотим у времени */
 }
 
-.red-amount {
-  color: red;
+/* доходы — зелёные */
+.amount-positive {
+  color: #32b36b;
 }
 
-.task-amount {
-  font-weight: bold;
+/* расходы — серые */
+.amount-negative {
+  color: #666666;
 }
 </style>

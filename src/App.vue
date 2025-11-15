@@ -1,6 +1,7 @@
 <template>
     <NavBar />
   <div class="app">
+    <DevMenu />
     <div class="container">
       <div class="content-wrapper">
         <router-view />
@@ -11,6 +12,7 @@
 
 <script setup>
 import NavBar from '@/components/NavBar.vue'
+import DevMenu from '@/components/DevMenu.vue'
 </script>
 
 <style scoped>

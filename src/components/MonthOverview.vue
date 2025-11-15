@@ -40,51 +40,68 @@
         ]"
           size="small"
       />
-      <el-checkbox v-model="doNotShowPast" label="С сегодня" size="small" />
-    </div>
-
-    <div class="counters" v-if="filteredDays.length">
-      <span>Рабочие дни: {{ workDaysCount }}</span> |
-      <span>Выходные: {{ offDaysCount }}</span> |
-      <span>Рабочие часы: {{ totalWorkHours }}</span>
+      <el-checkbox
+          v-model="doNotShowPast"
+          label="С сегодня"
+          size="small"
+      />
     </div>
 
     <div class="outer-container" v-if="filteredDays.length" v-loading="loading">
       <div class="month-header">
         <h2>📅 {{ monthOptions[selectedMonth - 1] }} {{ selectedYear }}</h2>
+
+        <StatsChips
+            v-if="summary"
+            :summary="summary"
+        />
       </div>
 
-      <div class="month-scroll">
-        <div
-            class="month-overview"
-            v-drag-scroller
-            ref="scrollContainer"
-            @wheel="onWheel"
-        >
-          <template v-for="(group, index) in groupedFilteredDays" :key="index">
-            <div class="month-group">
-              <DayPair
-                  v-for="day in group"
-                  :key="day.date"
-                  :day="day.day"
-                  :weekday="day.weekday"
-                  :type="day.type"
-                  :date="day.date"
-                  :tasks="tasks[day.date] || []"
-                  :class="{ 'forced-day': day.forced }"
-                  @completeTask="handleCompleteTask"
-                  @removeTask="handleRemoveTask"
-                  @addTask="handleAddTask"
-                  @editTask="handleEditTask"
+      <!-- 👇 новый общий контейнер под таймлайном и месячными событиями -->
+      <div class="month-body">
+        <div class="month-scroll">
+          <div
+              class="month-overview"
+              v-drag-scroller
+              ref="scrollContainer"
+              @wheel="onWheel"
+          >
+            <template
+                v-for="(group, index) in groupedFilteredDays"
+                :key="index"
+            >
+              <div class="month-group">
+                <DayPair
+                    v-for="day in group"
+                    :key="day.date"
+                    :day="day.day"
+                    :weekday="day.weekday"
+                    :type="day.type"
+                    :date="day.date"
+                    :tasks="tasks[day.date] || []"
+                    :class="{ 'forced-day': day.forced }"
+                    @completeTask="handleCompleteTask"
+                    @removeTask="handleRemoveTask"
+                    @addTask="handleAddTask"
+                    @editTask="handleEditTask"
+                />
+              </div>
+              <el-divider
+                  v-if="index !== groupedFilteredDays.length - 1"
+                  direction="vertical"
+                  class="group-divider"
               />
-            </div>
-            <el-divider
-                v-if="index !== groupedFilteredDays.length - 1"
-                direction="vertical"
-                class="group-divider"
-            />
-          </template>
+            </template>
+          </div>
         </div>
+
+        <!-- 👇 MonthlyEvents: под таймлайном, выровнен по его левому краю, вне скролла -->
+        <MonthlyEvents
+            v-if="monthlyEvents.length"
+            :events="monthlyEvents"
+            @edit="handleEditMonthly"
+            @remove="handleRemoveMonthly"
+        />
       </div>
     </div>
 
@@ -106,6 +123,7 @@
   </div>
 </template>
 
+
 <script setup>
 // ===========================
 // 🎯 SCRIPT (без optional chaining)
@@ -118,12 +136,16 @@ import EventEditor from './EventEditor.vue'
 import { parseISO, getISOWeek } from 'date-fns'
 import { useAuthStore } from '@/stores/auth'
 import { storeToRefs } from 'pinia'
+import StatsChips from './StatsChips.vue'
+import MonthlyEvents from './MonthlyEvents.vue'
+
 
 // --- STATE ---
 const authStore = useAuthStore()
 const { user: currentUser } = storeToRefs(authStore)
 
 const today = new Date()
+const summary = ref(null)
 
 const selectedUser = ref(null)
 const selectedDate = ref(new Date(today.getFullYear(), today.getMonth()))
@@ -157,6 +179,87 @@ const monthOptions = [
 
 // ====== 🔧 Временный оверрайд расписания (включить/выключить) ======
 const USE_TEMP_OVERRIDE = false
+
+// --- MONTHLY SPLIT ---
+function isMonthlyEvent(obj) {
+  if (!obj) return false
+
+  // верхнего уровня метка
+  if (typeof obj.recurrence_type === 'string' &&
+      obj.recurrence_type.toLowerCase() === 'monthly') {
+    return true
+  }
+
+  // вложенный event
+  const ev = (obj && obj.event) ? obj.event : null
+  if (ev) {
+    if (ev.is_recurring_monthly === true) return true
+
+    // частный протокол твоего проекта
+    if (typeof ev.date_mode === 'string') {
+      const dm = ev.date_mode.toLowerCase()
+      if (dm === 'number_of_month' || dm === 'monthly' || dm === 'by_month' || dm === 'month') {
+        return true
+      }
+    }
+
+    // косвенные признаки
+    if ((typeof ev.month_year === 'number') && (typeof ev.month_number === 'number')) {
+      return true
+    }
+  }
+
+  return false
+}
+
+/**
+ * Возвращает кортеж: [monthly[], regular[]]
+ * - monthly: только те, которые относятся к выбранному месяцу/году
+ * - regular: всё остальное
+ */
+function splitMonthlyForPeriod(items, year, month) {
+  const monthly = []
+  const regular = []
+
+  for (let i = 0; i < items.length; i++) {
+    const it = items[i]
+    if (!isMonthlyEvent(it)) {
+      regular.push(it)
+      continue
+    }
+
+    // Фильтрация по периоду: сначала пробуем явные поля
+    const ev = it.event || {}
+    const y = typeof ev.month_year === 'number' ? ev.month_year : null
+    const m = typeof ev.month_number === 'number' ? ev.month_number : null
+
+    let isForPeriod = false
+    if (y !== null && m !== null) {
+      isForPeriod = (y === year && m === month)
+    } else {
+      // fallback: проверим datetime/starts_at попадание в (year, month)
+      // Нам важно НЕ подвязывать к конкретному дню, но понимать месяц
+      let iso = null
+      if (typeof it.datetime === 'string' && it.datetime) iso = it.datetime
+      else if (ev && typeof ev.starts_at === 'string' && ev.starts_at) iso = ev.starts_at
+
+      if (iso) {
+        const d = new Date(iso)
+        if (!isNaN(d.getTime())) {
+          isForPeriod = (d.getFullYear() === year && (d.getMonth() + 1) === month)
+        }
+      }
+    }
+
+    if (isForPeriod) monthly.push(it)
+    else {
+      // это месячное, но не наш период — игнорируем; в regular не кладём
+    }
+  }
+
+  return [monthly, regular]
+}
+
 
 function buildTempSchedule(year, month) {
   // Сколько дней в месяце
@@ -236,6 +339,25 @@ function buildTempSchedule(year, month) {
 
 // --- HELPERS ---
 const disabledDate = function () { return false }
+
+const monthlyEvents = ref([])
+
+function handleEditMonthly(ev){
+  // ev — это уже вложенный event (мы его передаём из компонента)
+  currentTask.value = ev
+  isModalVisible.value = true
+}
+
+async function handleRemoveMonthly(ev){
+  try {
+    if (!ev || !ev.id) return
+    await axios.delete('schedule/events/' + ev.id + '/delete/')
+    await loadAllEvents(selectedYear.value, selectedMonth.value)
+  } catch (err) {
+    console.error('Ошибка при удалении месячного события:', err)
+  }
+}
+
 
 function onWheel(e) {
   const container = scrollContainer.value
@@ -399,18 +521,6 @@ const filteredDays = computed(function () {
   return list
 })
 
-const workDaysCount = computed(function () {
-  return filteredDays.value.filter(function (day) { return day.type === 'work' }).length
-})
-const offDaysCount = computed(function () {
-  return filteredDays.value.filter(function (day) { return day.type === 'off' }).length
-})
-const totalWorkHours = computed(function () {
-  const dur = (pattern.value && typeof pattern.value.working_day_duration === 'number')
-      ? pattern.value.working_day_duration
-      : 8
-  return workDaysCount.value * dur
-})
 
 // 🧩 Группы из API + фильтрация по allowedDates
 const groupedFilteredDays = computed(function () {
@@ -629,9 +739,21 @@ async function loadAllEvents(year, month) {
     }
     console.log('[all_events] count(normalized):', normalized.length)
 
-    const visible = []
+
+    const [monthly, regular] = splitMonthlyForPeriod(normalized, year, month)
+    monthlyEvents.value = monthly
+
+/*    const visible = []
     for (let i = 0; i < normalized.length; i++) {
       const item = normalized[i]
+      if (showCancelled.value || !isCancelledTask(item)) {
+        visible.push(item)
+      }
+    }*/
+
+    const visible = []
+    for (let i = 0; i < regular.length; i++) {
+      const item = regular[i]
       if (showCancelled.value || !isCancelledTask(item)) {
         visible.push(item)
       }
@@ -644,8 +766,8 @@ async function loadAllEvents(year, month) {
       if (!tasksByDate[dateKey]) tasksByDate[dateKey] = []
       tasksByDate[dateKey].push(visible[i])
     }
-
     tasks.value = tasksByDate
+
   } catch (err) {
     ElMessage.error('Не удалось загрузить таски из all_events 🥲')
     console.error(err)
@@ -666,6 +788,7 @@ watch([selectedUser, selectedMonth, selectedYear], async function ([user, month,
     groups.value = data && Array.isArray(data.groups) ? data.groups : []
     pattern.value = data && data.pattern ? data.pattern : {}
     tasks.value = (data && typeof data.tasks === 'object' && data.tasks !== null) ? data.tasks : {}
+    summary.value = (data && typeof data.summary === 'object') ? data.summary : null
 
     console.log('[preview] days:', Array.isArray(days.value) ? days.value.length : 0)
     console.log('[preview] groups:', Array.isArray(groups.value) ? groups.value.length : 0)
@@ -677,6 +800,7 @@ watch([selectedUser, selectedMonth, selectedYear], async function ([user, month,
       groups.value = built.groups
       pattern.value = built.pattern
       tasks.value = {} // не рисуем all_events
+      summary.value = computeSummaryFromDays(built.days, built.pattern)
       await nextTick()
       return // не зовём loadAllEvents
     }
@@ -712,6 +836,34 @@ watch([selectedUser, selectedMonth, selectedYear], async function ([user, month,
     loading.value = false
   }
 }, { immediate: true })
+
+
+function computeSummaryFromDays(daysArr, patternObj) {
+  const counts = { work: 0, off: 0, holiday: 0, sick: 0, other: 0 }
+  for (let i = 0; i < daysArr.length; i++) {
+    const t = daysArr[i] && daysArr[i].type ? String(daysArr[i].type) : ''
+    if (t === 'work') counts.work++
+    else if (t === 'off') counts.off++
+    else if (t === 'holiday') counts.holiday++
+    else if (t === 'sick') counts.sick++
+    else counts.other++
+  }
+  const hoursPerDay =
+      (patternObj && typeof patternObj.working_day_duration === 'number')
+          ? patternObj.working_day_duration
+          : 8
+  return {
+    work_days: counts.work,
+    off_days: counts.off,
+    holidays: counts.holiday,
+    sick_days: counts.sick,
+    hours_per_day: hoursPerDay,
+    work_hours_total: counts.work * hoursPerDay,
+    total_days: daysArr.length,
+    other_days: counts.other,
+  }
+}
+
 </script>
 
 <style scoped>
@@ -730,10 +882,12 @@ watch([selectedUser, selectedMonth, selectedYear], async function ([user, month,
 .month-scroll {
   position: relative;
   scroll-behavior: smooth;
-  max-width: 90vw;
+  flex: 1 1 auto;
+  max-width: 100%;
   mask-image: linear-gradient(to right, transparent, black 7%, black 93%, transparent);
   -webkit-mask-image: linear-gradient(to right, transparent, black 7%, black 93%, transparent);
   overflow-x: auto;
+  overflow-y: hidden;
   scrollbar-width: none; /* Firefox */
   -ms-overflow-style: none; /* IE 10+ */
 }
@@ -743,14 +897,12 @@ watch([selectedUser, selectedMonth, selectedYear], async function ([user, month,
   flex-direction: row;
   justify-content: flex-start;
   gap: 1.5rem;
-  padding: 1rem 0;
-  overflow-x: auto;
-  overflow-y: hidden;
   flex-wrap: nowrap;
+  padding: 1rem 30vw; /* если понравилось затемнение по краям, можно оставить */
   scrollbar-width: none; /* Firefox */
   -ms-overflow-style: none; /* IE 10+ */
-  padding: 0 30vw;
 }
+
 
 .month-overview::-webkit-scrollbar {
   display: none; /* Chrome, Safari, Opera */
@@ -763,6 +915,15 @@ watch([selectedUser, selectedMonth, selectedYear], async function ([user, month,
   gap: 0.4rem;
   align-items: flex-start;
   transition: transform 0.3s ease;
+}
+
+.month-right {
+  flex: 0 0 320px; /* ширина панели, можно подправить по вкусу */
+  max-height: 70vh;
+  overflow-y: auto;
+  padding-left: 1rem;
+  border-left: 1px solid var(--el-border-color-lighter);
+  box-sizing: border-box;
 }
 
 .group-divider {
@@ -797,6 +958,28 @@ watch([selectedUser, selectedMonth, selectedYear], async function ([user, month,
   outline-offset: 3px;
   border-radius: 8px;
 }
+
+.month-main {
+  display: flex;
+  align-items: flex-start;
+  gap: 1.5rem;
+}
+
+.month-body {
+  max-width: 90vw;
+  margin: 0 auto;
+}
+
+.month-scroll {
+  position: relative;
+  scroll-behavior: smooth;
+  mask-image: linear-gradient(to right, transparent, black 7%, black 93%, transparent);
+  -webkit-mask-image: linear-gradient(to right, transparent, black 7%, black 93%, transparent);
+  overflow-x: auto;
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE 10+ */
+}
+
 </style>
 
 <style>
