@@ -1,54 +1,54 @@
 <template>
   <div class="day" ref="containerRef">
     <div
-      class="calendar-day"
-      :class="[typeClass, { 'today': isToday }]"
-      @click="showForm = true; focusNextTick()"
+        class="calendar-day"
+        :class="[typeClass, { 'today': isToday }]"
+        @click="showForm = true; focusNextTick()"
     >
       <div class="day-number">{{ day }}</div>
       <div class="day-weekday">{{ weekday.toLowerCase() }}</div>
     </div>
 
     <DayTaskList
-      v-if="tasks.length"
-      :tasks="tasks"
-      :date="date"
-      @completeTask="handleCompleteTask"
-      @removeTask="handleRemoveTask"
-      @addTask="handleAddTask"
-      @editTask="handleEditTask"
+        v-if="tasks.length"
+        :tasks="tasks"
+        :date="date"
+        @completeTask="handleCompleteTask"
+        @removeTask="handleRemoveTask"
+        @addTask="handleAddTask"
+        @editTask="handleEditTask"
     />
 
     <!-- Overlay -->
     <Teleport to="body">
-    <div v-if="showForm" class="overlay" @click.self="cancelAdd">
-      <div class="task-form" @keydown.enter="submitTask" @click.stop>
-        <h3>Событие на {{ formattedDate }}</h3>
+      <div v-if="showForm" class="overlay" @click.self="cancelAdd">
+        <div class="task-form" @keydown.enter="submitTask" @click.stop>
+          <h3>Событие на {{ formattedDate }}</h3>
 
 
-        <el-input
-          v-model="form.name"
-          placeholder="Название"
-          ref="titleInputRef"
-        />
+          <el-input
+              v-model="form.name"
+              placeholder="Название"
+              ref="titleInputRef"
+          />
 
-        <el-input
-          v-model="form.description"
-          placeholder="Описание"
-        />
+          <el-input
+              v-model="form.description"
+              placeholder="Описание"
+          />
 
-        <el-time-picker
-          v-model="form.time"
-          placeholder="Выбери время"
-          format="HH:mm"
-          value-format="HH:mm"
-          ref="timeInputRef"
-        />
+          <el-time-picker
+              v-model="form.time"
+              placeholder="Выбери время"
+              format="HH:mm"
+              value-format="HH:mm"
+              ref="timeInputRef"
+          />
 
-        <el-button type="primary" @click="submitTask">Сохранить</el-button>
+          <el-button type="primary" @click="submitTask">Сохранить</el-button>
+        </div>
       </div>
-    </div>
-  </Teleport>
+    </Teleport>
   </div>
 </template>
 
@@ -78,14 +78,14 @@ const dayRef = ref<any>(null)
 const typeClass = computed(() => props.type ? `day-${props.type}` : '')
 
 const isToday = computed(() => {
-      const today = new Date()
-      const dayDate = new Date(props.date)
-      return (
-        today.getFullYear() === dayDate.getFullYear() &&
-        today.getMonth() === dayDate.getMonth() &&
-        today.getDate() === dayDate.getDate()
-      )
-    })
+  const today = new Date()
+  const dayDate = new Date(props.date)
+  return (
+      today.getFullYear() === dayDate.getFullYear() &&
+      today.getMonth() === dayDate.getMonth() &&
+      today.getDate() === dayDate.getDate()
+  )
+})
 
 const timeInputRef = ref(null)
 const titleInputRef = ref(null)
@@ -116,9 +116,7 @@ function cancelAdd() {
   showForm.value = false
   form.value = { time: '', name: '', description: '' }
 }
-
 async function submitTask() {
-
   if (!form.value.time || !form.value.name) return
 
   try {
@@ -128,24 +126,15 @@ async function submitTask() {
 
     const isoDatetime = dateObj.toISOString()
 
-
-    console.log('в начале функции')
-    console.log('clicked day:', props.day)
-    console.log('props.date:', props.date)
-    console.log('isoDatetime:', isoDatetime)
-
     const payload = {
       name: form.value.name,
       description: form.value.description,
-      starts_at: isoDatetime
+      start_datetime: isoDatetime
     }
-    console.log('[submitTask] payload:', payload)
+
     const response = await axios.post('schedule/events/', payload)
-    console.log('[submitTask] response.data:', response.data)
 
-    console.log('[submitTask] payload:', payload)
     emit('addTask', response.data)
-
 
     // Очищаем форму, но оставляем открытой
     form.value = { time: '', name: '', description: '' }

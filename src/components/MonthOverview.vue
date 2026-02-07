@@ -47,16 +47,27 @@
       />
     </div>
 
+
+
     <div class="outer-container" v-if="filteredDays.length" v-loading="loading">
-      <div class="month-header">
-        <h2>📅 {{ monthOptions[selectedMonth - 1] }} {{ selectedYear }}</h2>
 
-        <StatsChips
-            v-if="summary"
-            :summary="summary"
-        />
+
+        <div class="month-header">
+          <h2>📅 {{ monthOptions[selectedMonth - 1] }} {{ selectedYear }}</h2>
+          <div
+              class="month-summary-clickzone"
+              role="button"
+              tabindex="0"
+              @click="openScheduleDialog"
+              @keydown.enter="openScheduleDialog"
+              @keydown.space.prevent="openScheduleDialog"
+          >
+          <StatsChips
+              v-if="summary"
+              :summary="summary"
+          />
+        </div>
       </div>
-
       <!-- 👇 новый общий контейнер под таймлайном и месячными событиями -->
       <div class="month-body">
         <div class="month-scroll">
@@ -106,6 +117,33 @@
     </div>
 
     <el-dialog
+        v-model="isScheduleDialogOpen"
+        title="Текущее расписание"
+        width="520px"
+        :close-on-click-modal="true"
+        destroy-on-close
+        close-on-press-escape
+    >
+      <div class="schedule-dialog-body">
+        <div class="schedule-subtitle">
+          {{ monthOptions[selectedMonth - 1] }} {{ selectedYear }}
+        </div>
+
+        <div class="schedule-row">
+          <div class="schedule-value">{{ patternText }}</div>
+        </div>
+
+        <div class="schedule-actions">
+          <el-button type="primary" @click="openTemplatePicker">
+            Сменить шаблон
+          </el-button>
+        </div>
+      </div>
+    </el-dialog>
+
+
+
+    <el-dialog
         v-model="isModalVisible"
         title="Редактировать задачу"
         width="600px"
@@ -125,9 +163,6 @@
 
 
 <script setup>
-// ===========================
-// 🎯 SCRIPT (без optional chaining)
-// ===========================
 import { ref, onMounted, computed, watch, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
 import DayPair from './DayPair.vue'
@@ -139,6 +174,9 @@ import { storeToRefs } from 'pinia'
 import StatsChips from './StatsChips.vue'
 import MonthlyEvents from './MonthlyEvents.vue'
 
+import { useDevFlags } from '@/composables/useDevFlags'
+
+const { devFlags } = useDevFlags()
 
 // --- STATE ---
 const authStore = useAuthStore()
@@ -258,6 +296,38 @@ function splitMonthlyForPeriod(items, year, month) {
   }
 
   return [monthly, regular]
+}
+
+function buildPatternText(arr) {
+  if (!Array.isArray(arr) || arr.length === 0) return 'Не задано'
+
+  const parts = []
+  for (let i = 0; i < arr.length; i++) {
+    const n = arr[i]
+    if (typeof n !== 'number' || n <= 0) continue
+
+    const isWork = (i % 2 === 0) // 0,2,4... рабочие; 1,3,5... выходные
+    const dayWord = (n === 1) ? 'день' : 'дней'
+
+    if (isWork) parts.push(String(n) + ' рабочих ' + dayWord)
+    else parts.push(String(n) + ' выходных ' + dayWord)
+  }
+
+  if (parts.length === 0) return 'Не задано'
+  return parts.join(', потом ')
+}
+
+const patternText = computed(() => {
+  const p = pattern.value
+  if (!p || typeof p !== 'object') return 'Не задано'
+
+  const arr = p.pattern_after_start
+  return buildPatternText(arr)
+})
+
+function openTemplatePicker() {
+  // следующий шаг: открыть вторую секцию/диалог выбора шаблона
+  console.log('TODO: template picker')
 }
 
 
@@ -864,6 +934,65 @@ function computeSummaryFromDays(daysArr, patternObj) {
   }
 }
 
+const isScheduleDialogOpen = ref(false)
+
+const editForm = ref({
+  template: '',
+  daysOffAtStart: 0,
+  lastDayWorking: true
+})
+
+function openScheduleDialog() {
+  const p = pattern.value
+
+  const hasPattern = p && typeof p === 'object' && Object.keys(p).length > 0
+  const hasId = hasPattern && (p.id !== undefined && p.id !== null)
+
+  if (!hasPattern || !hasId) {
+    ElMessage.warning('Расписание ещё загружается — попробуй через секунду')
+    return
+  }
+
+  // заполняем форму из текущего паттерна (из /schedule/preview)
+  editForm.value = {
+    template: (typeof p.mode === 'string' && p.mode) ? p.mode : '',
+    daysOffAtStart: (typeof p.days_off_at_start === 'number') ? p.days_off_at_start : 0,
+    lastDayWorking: (typeof p.last_day_always_working === 'boolean') ? p.last_day_always_working : true
+  }
+
+  isScheduleDialogOpen.value = true
+}
+
+
+function closeScheduleDialog() {
+  isScheduleDialogOpen.value = false
+}
+
+const scheduleSummary = computed(() => {
+  // временно: чтобы было что показать
+  if (editForm.value.template) {
+    return editForm.value.template
+  }
+  return 'Не задано'
+})
+
+async function saveSchedule() {
+  try {
+    const payload = {
+      template: editForm.value.template,
+      days_off_at_start: editForm.value.daysOffAtStart,
+      last_day_working: editForm.value.lastDayWorking
+    }
+
+    // endpoint подставишь реальный (пока заглушка)
+    await axios.post('schedule/month-pattern/', payload)
+
+    isScheduleDialogOpen.value = false
+  } catch (err) {
+    console.error('Ошибка при сохранении расписания:', err)
+  }
+}
+
 </script>
 
 <style scoped>
@@ -877,19 +1006,6 @@ function computeSummaryFromDays(daysArr, patternObj) {
 .month-header {
   margin-bottom: 2rem;
   text-align: center;
-}
-
-.month-scroll {
-  position: relative;
-  scroll-behavior: smooth;
-  flex: 1 1 auto;
-  max-width: 100%;
-  mask-image: linear-gradient(to right, transparent, black 7%, black 93%, transparent);
-  -webkit-mask-image: linear-gradient(to right, transparent, black 7%, black 93%, transparent);
-  overflow-x: auto;
-  overflow-y: hidden;
-  scrollbar-width: none; /* Firefox */
-  -ms-overflow-style: none; /* IE 10+ */
 }
 
 .month-overview {
@@ -981,6 +1097,67 @@ function computeSummaryFromDays(daysArr, patternObj) {
 }
 
 </style>
+
+<style scoped lang="scss">
+.month-summary-clickzone {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+
+  padding: 14px 18px;
+  border-radius: 14px;
+
+  cursor: pointer;
+  user-select: none;
+
+  transition: background-color 0.15s ease, box-shadow 0.15s ease, transform 0.08s ease;
+}
+
+.month-summary-clickzone:hover {
+  background-color: rgba(64, 158, 255, 0.08);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.08);
+}
+
+.month-summary-clickzone:active {
+  transform: translateY(1px);
+}
+
+.month-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.schedule-dialog-body {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.schedule-subtitle {
+  margin-top: -1rem;
+
+}
+
+
+.schedule-section-title {
+  font-weight: 600;
+  margin-top: 0px;
+}
+
+.kv {
+  display: grid;
+  grid-template-columns: 110px 1fr;
+  gap: 10px;
+  padding: 6px 0;
+}
+
+.k {
+  opacity: 0.7;
+}
+</style>
+
 
 <style>
 .content-wrapper {

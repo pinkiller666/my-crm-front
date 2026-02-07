@@ -32,6 +32,24 @@ const router = createRouter({
       component: () => import('../views/DailyTasksView.vue'),
       meta: { requiresAuth: true },
     },
+    {
+      path: '/add-event',
+      name: 'add-event',
+      component: () => import('../views/AddEventView.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/artworks',
+      name: 'artworks',
+      component: () => import('../views/CommissionsView.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/commissions',
+      name: 'commissions',
+      component: () => import('../views/ComissionCrud.vue'),
+      meta: { requiresAuth: true },
+    },
   ],
 })
 

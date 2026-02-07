@@ -40,7 +40,10 @@ const route = useRoute()
 const tabs = [
   { label: 'Timeline', path: '/' },
   { label: 'Финансы', path: '/finance' },
-  { label: 'На день', path: '/daily' }
+  { label: 'На день', path: '/daily' },
+  { label: 'Добавка события', path: '/add-event' },
+  { label: 'Арты', path: '/artworks' },
+  { label: 'Коммишоны', path: '/commissions' }
 ]
 
 // текущее активное меню

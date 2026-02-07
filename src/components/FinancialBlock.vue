@@ -23,7 +23,7 @@
             <el-option
               v-for="account in accounts"
               :key="account.id"
-              :label="`${account.name} (₽${account.balance})`"
+              :label="`${account.name} (${account.amount}₽)`"
               :value="account.id"
             />
           </el-select>
